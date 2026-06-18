@@ -1,5 +1,14 @@
-import { permanentRedirect } from 'next/navigation';
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Page() {
-  permanentRedirect('/admin/crops');
+  const router = useRouter();
+
+  useEffect(() => {
+    router.push('/admin/crops');
+  }, [router]);
+
+  return null;
 }
