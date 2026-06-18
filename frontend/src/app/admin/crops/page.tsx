@@ -90,7 +90,7 @@ export default function AdminCropsPage() {
       if (json.success) {
         setCrops(json.data || []);
       } else {
-        showToast('Failed to load crops', 'error');
+        showToast(json.error || 'Failed to load crops', 'error');
       }
     } catch (error) {
       console.error('Failed to load crops:', error);
@@ -394,12 +394,12 @@ export default function AdminCropsPage() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  disabled={isEditing && tab !== activeTab}
+                  disabled={saving}
                   className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 transition focus:outline-none focus:ring-2 focus:ring-green-500 ${
                     activeTab === tab
                       ? 'border-green-600 text-green-600'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
-                  } ${isEditing && tab !== activeTab ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {tab === 'basics' && 'Basics'}
                   {tab === 'procedure' && 'Growth Procedure'}
@@ -505,6 +505,7 @@ export default function AdminCropsPage() {
                         <input
                           type="number"
                           min="1"
+                          placeholder="Hours"
                           value={procedure.soak_hours || ''}
                           onChange={(e) => setProcedure({ ...procedure, soak_hours: e.target.value ? parseInt(e.target.value) : undefined })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -559,6 +560,7 @@ export default function AdminCropsPage() {
                         <input
                           type="number"
                           min="1"
+                          placeholder="Days"
                           value={procedure.stack_days || ''}
                           onChange={(e) => setProcedure({ ...procedure, stack_days: e.target.value ? parseInt(e.target.value) : undefined })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -591,6 +593,7 @@ export default function AdminCropsPage() {
                       <input
                         type="number"
                         min="1"
+                        placeholder="Days"
                         value={procedure.growth_env_days || ''}
                         onChange={(e) => setProcedure({ ...procedure, growth_env_days: e.target.value ? parseInt(e.target.value) : 0 })}
                         disabled={!isEditing}

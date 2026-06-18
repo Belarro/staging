@@ -1,7 +1,45 @@
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 
-const SUPABASE_URL = 'wbqzlxdyjdmbzifhsyil.supabase.co';
-const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndicXpseGR5amRtYnppZmhzeWlsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTc3OTI4NCwiZXhwIjoyMDk3MzU1Mjg0fQ.8D3AqF8nrhzey4f2vrkKPv0jLU5s2w9M0TYxq4P3K7E';
+// Load env variables from environment or frontend/.env.local
+let SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'wbqzlxdyjdmbzifhsyil.supabase.co';
+
+if (!SERVICE_ROLE_KEY) {
+  try {
+    const envPath = path.join(__dirname, 'frontend', '.env.local');
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, 'utf8');
+      const lines = envContent.split(/\r?\n/);
+      for (const line of lines) {
+        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+        if (match) {
+          const key = match[1];
+          let value = (match[2] || '').trim();
+          // Remove wrapping quotes if any
+          if (value.length > 1 && value.startsWith('"') && value.endsWith('"')) {
+            value = value.substring(1, value.length - 1);
+          } else if (value.length > 1 && value.startsWith("'") && value.endsWith("'")) {
+            value = value.substring(1, value.length - 1);
+          }
+          if (key === 'SUPABASE_SERVICE_ROLE_KEY') {
+            SERVICE_ROLE_KEY = value;
+          } else if (key === 'NEXT_PUBLIC_SUPABASE_URL') {
+            SUPABASE_URL = value.replace(/^https?:\/\//, '');
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Warning: Could not read frontend/.env.local:', err.message);
+  }
+}
+
+if (!SERVICE_ROLE_KEY) {
+  console.error('Error: SUPABASE_SERVICE_ROLE_KEY is not defined in process.env or frontend/.env.local\n');
+  process.exit(1);
+}
 
 const sqls = [
   `DROP TABLE IF EXISTS belarro_v4_product_variant CASCADE;`,

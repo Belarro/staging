@@ -73,7 +73,7 @@ describe('AdminCropsPage', () => {
       await userEvent.click(newCropButton);
 
       await waitFor(() => {
-        expect(screen.getByDisplayValue('')).toBeInTheDocument();
+        expect(screen.getAllByDisplayValue('')).not.toHaveLength(0);
       });
     });
 
@@ -136,6 +136,14 @@ describe('AdminCropsPage', () => {
 
       await userEvent.type(nameEnInput, 'Test Crop');
       await userEvent.type(nameDeInput, 'Test Ernte');
+
+      // Go to Procedure tab and set growth environment days
+      const procedureTab = screen.getByText('Growth Procedure');
+      await userEvent.click(procedureTab);
+
+      const daysInput = screen.getByRole('spinbutton');
+      await userEvent.clear(daysInput);
+      await userEvent.type(daysInput, '6');
 
       const saveButton = screen.getByText('Save');
       await userEvent.click(saveButton);
@@ -344,7 +352,7 @@ describe('AdminCropsPage', () => {
 
       render(<AdminCropsPage />);
 
-      const cropItem = await screen.findByText('Test');
+      const cropItem = (await screen.findAllByText('Test'))[0];
       await userEvent.click(cropItem);
 
       const procedureTab = await screen.findByText('Growth Procedure');
@@ -402,8 +410,8 @@ describe('AdminCropsPage', () => {
       await userEvent.click(sizesTab);
 
       await waitFor(() => {
-        expect(screen.getByText('100g')).toBeInTheDocument();
-        expect(screen.getByText('225g')).toBeInTheDocument();
+        expect(screen.getAllByText('100g')[0]).toBeInTheDocument();
+        expect(screen.getAllByText('225g')[0]).toBeInTheDocument();
       });
     });
 
@@ -441,7 +449,7 @@ describe('AdminCropsPage', () => {
 
       render(<AdminCropsPage />);
 
-      const cropItem = await screen.findByText('Test');
+      const cropItem = (await screen.findAllByText('Test'))[0];
       await userEvent.click(cropItem);
 
       const sizesTab = await screen.findByText('Sizes & Prices');
@@ -460,9 +468,8 @@ describe('AdminCropsPage', () => {
 
       const addButton = screen.getByText('Add Size');
       await userEvent.click(addButton);
-
       await waitFor(() => {
-        expect(screen.getByText('600g')).toBeInTheDocument();
+        expect(screen.getAllByText('600g')[0]).toBeInTheDocument();
       });
     });
   });
@@ -563,9 +570,7 @@ describe('AdminCropsPage', () => {
       const deleteButton = await screen.findByText('Delete');
       await userEvent.click(deleteButton);
 
-      const confirmDeleteButton = await screen.findByText('Delete', {
-        selector: 'button',
-      });
+      const confirmDeleteButton = (await screen.findAllByRole('button', { name: 'Delete' }))[1];
       await userEvent.click(confirmDeleteButton);
 
       await waitFor(() => {
@@ -630,7 +635,7 @@ describe('AdminCropsPage', () => {
 
       render(<AdminCropsPage />);
 
-      const cropItem = await screen.findByText('Test');
+      const cropItem = (await screen.findAllByText('Test'))[0];
       await userEvent.click(cropItem);
 
       const editButton = await screen.findByText('Edit');

@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/89</span>
+                <span class='fraction'>0/95</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/125</span>
+                <span class='fraction'>0/129</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/5</span>
+                <span class='fraction'>0/6</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/84</span>
+                <span class='fraction'>0/88</span>
             </div>
         
             
@@ -384,7 +384,16 @@
 <a name='L319'></a><a href='#L319'>319</a>
 <a name='L320'></a><a href='#L320'>320</a>
 <a name='L321'></a><a href='#L321'>321</a>
-<a name='L322'></a><a href='#L322'>322</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -482,6 +491,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -513,10 +528,13 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -801,10 +819,16 @@ export async function <span class="cstat-no" title="statement not covered" ><spa
       );
     }
 &nbsp;
+    // Generate UUIDs for all records
+    const cropId = <span class="cstat-no" title="statement not covered" >crypto.randomUUID();</span>
+    const procedureId = <span class="cstat-no" title="statement not covered" >procedure ? crypto.randomUUID() : null;</span>
+    const variantIds = <span class="cstat-no" title="statement not covered" >variants ? variants.map(<span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >c</span>rypto.randomUUID()) : [</span>];</span>
+&nbsp;
     // Create crop
     const crops = <span class="cstat-no" title="statement not covered" >await fetchFromSupabase('/belarro_v4_crop', {</span>
       method: 'POST',
       body: JSON.stringify({
+        id: cropId,
         name_en,
         name_de,
         flavor_en: flavor_en || null,
@@ -820,7 +844,8 @@ export async function <span class="cstat-no" title="statement not covered" ><spa
 <span class="cstat-no" title="statement not covered" >      await fetchFromSupabase('/belarro_v4_growth_procedure', {</span>
         method: 'POST',
         body: JSON.stringify({
-          crop_id: crop.id,
+          id: procedureId,
+          crop_id: cropId,
           soak_enabled: procedure.soak_enabled || false,
           soak_hours: procedure.soak_hours || null,
           cover_soil_enabled: procedure.cover_soil_enabled || false,
@@ -835,12 +860,14 @@ export async function <span class="cstat-no" title="statement not covered" ><spa
 &nbsp;
     // Create variants if provided
 <span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (variants &amp;&amp; Array.isArray(variants) &amp;&amp; variants.length &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >      for (const variant of variants) {</span>
+<span class="cstat-no" title="statement not covered" >      for (let i = <span class="cstat-no" title="statement not covered" >0; i</span> &lt; variants.length; i++) {</span>
+        const variant = <span class="cstat-no" title="statement not covered" >variants[i];</span>
 <span class="cstat-no" title="statement not covered" >        <span class="missing-if-branch" title="if path not taken" >I</span>if (variant.size_name &amp;&amp; variant.size_grams) {</span>
 <span class="cstat-no" title="statement not covered" >          await fetchFromSupabase('/belarro_v4_product_variant', {</span>
             method: 'POST',
             body: JSON.stringify({
-              crop_id: crop.id,
+              id: variantIds[i],
+              crop_id: cropId,
               size_name: variant.size_name,
               size_grams: variant.size_grams,
               price_eur: variant.price_eur || null,
@@ -853,15 +880,15 @@ export async function <span class="cstat-no" title="statement not covered" ><spa
 &nbsp;
     // Fetch full crop with relations
     const fullCrop = <span class="cstat-no" title="statement not covered" >await fetchFromSupabase(</span>
-      `/belarro_v4_crop?id=eq.${crop.id}&amp;select=*`
+      `/belarro_v4_crop?id=eq.${cropId}&amp;select=*`
     );
 &nbsp;
     const procedure_data = <span class="cstat-no" title="statement not covered" >await fetchFromSupabase(</span>
-      `/belarro_v4_growth_procedure?crop_id=eq.${crop.id}&amp;select=*`
+      `/belarro_v4_growth_procedure?crop_id=eq.${cropId}&amp;select=*`
     );
 &nbsp;
     const variants_data = <span class="cstat-no" title="statement not covered" >await fetchFromSupabase(</span>
-      `/belarro_v4_product_variant?crop_id=eq.${crop.id}&amp;select=*&amp;order=size_grams.asc`
+      `/belarro_v4_product_variant?crop_id=eq.${cropId}&amp;select=*&amp;order=size_grams.asc`
     );
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    return NextResponse.json(</span>
@@ -1033,7 +1060,7 @@ export async function <span class="cstat-no" title="statement not covered" ><spa
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-18T13:32:05.270Z
+                at 2026-06-18T13:40:33.927Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>
