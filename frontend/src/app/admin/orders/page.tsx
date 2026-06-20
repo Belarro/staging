@@ -7,9 +7,7 @@ interface OrderLine {
   customer_id: string;
   product_variant_id: string;
   quantity: number;
-  expected_harvest_date: string;
   status: string;
-  recurring: boolean;
   customer: { id: string; name: string; email: string };
   variant: {
     id: string;
@@ -30,24 +28,11 @@ interface Crop {
 interface NewLine { crop_id: string; product_variant_id: string; quantity: string }
 const emptyLine = (): NewLine => ({ crop_id: '', product_variant_id: '', quantity: '1' });
 
-const STATUS_COLORS: Record<string, string> = {
-  pending_seed: 'bg-purple-50 text-purple-700',
-  growing: 'bg-blue-50 text-blue-700',
-  ready_harvest: 'bg-amber-50 text-amber-700',
-  delivered: 'bg-green-50 text-green-700',
-};
-
-const NEXT_STATUS: Record<string, string> = {
-  pending_seed: 'growing',
-  growing: 'ready_harvest',
-  ready_harvest: 'delivered',
-};
-
-const NEXT_LABEL: Record<string, string> = {
-  pending_seed: 'Start Growing',
-  growing: 'Ready to Harvest',
-  ready_harvest: 'Mark Delivered',
-};
+// Customer group with editable lines
+interface CustomerGroup {
+  customer: OrderLine['customer'];
+  lines: OrderLine[];
+}
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderLine[]>([]);
@@ -56,13 +41,14 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  // Add order modal state
-  const [showModal, setShowModal] = useState(false);
-  const [modalCustomerId, setModalCustomerId] = useState('');
-  const [newLines, setNewLines] = useState<NewLine[]>([emptyLine()]);
+  // Add order modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addCustomerId, setAddCustomerId] = useState('');
+  const [addLines, setAddLines] = useState<NewLine[]>([emptyLine()]);
 
-  // Inline edit state: orderId -> new quantity
-  const [editingQty, setEditingQty] = useState<Record<string, string>>({});
+  // Edit modal — shows all lines for one customer
+  const [editGroup, setEditGroup] = useState<CustomerGroup | null>(null);
+  const [editQty, setEditQty] = useState<Record<string, string>>({});
 
   const fetchOrders = async () => {
     try {
@@ -70,11 +56,8 @@ export default function OrdersPage() {
       const res = await fetch('/api/orders');
       const json = await res.json();
       if (json.success) setOrders(json.data || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
   const fetchResources = async () => {
@@ -84,21 +67,16 @@ export default function OrdersPage() {
       const crJson = await crRes.json();
       if (cJson.success) setCustomers(cJson.data || []);
       if (crJson.success) setCrops(crJson.data || []);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   };
 
   useEffect(() => { fetchOrders(); fetchResources(); }, []);
 
-  // Group orders by customer
   const grouped = useMemo(() => {
-    const map = new Map<string, { customer: OrderLine['customer']; lines: OrderLine[] }>();
+    const map = new Map<string, CustomerGroup>();
     for (const o of orders) {
       if (!o.customer) continue;
-      if (!map.has(o.customer_id)) {
-        map.set(o.customer_id, { customer: o.customer, lines: [] });
-      }
+      if (!map.has(o.customer_id)) map.set(o.customer_id, { customer: o.customer, lines: [] });
       map.get(o.customer_id)!.lines.push(o);
     }
     return Array.from(map.values());
@@ -110,36 +88,9 @@ export default function OrdersPage() {
     return grouped.filter(g => g.customer.name.toLowerCase().includes(q));
   }, [grouped, search]);
 
-  const handleAdvanceStatus = async (id: string, nextStatus: string) => {
-    await fetch(`/api/orders/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: nextStatus }),
-    });
-    fetchOrders();
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this order line?')) return;
-    await fetch(`/api/orders/${id}`, { method: 'DELETE' });
-    fetchOrders();
-  };
-
-  const handleSaveQty = async (id: string, customerId: string) => {
-    const qty = parseFloat(editingQty[id]);
-    if (!qty || qty < 1) return;
-    await fetch(`/api/orders/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quantity: qty }),
-    });
-    setEditingQty(prev => { const n = { ...prev }; delete n[id]; return n; });
-    fetchOrders();
-  };
-
-  // New order modal
-  const updateNewLine = (i: number, field: keyof NewLine, value: string) => {
-    setNewLines(prev => {
+  // --- Add order ---
+  const updateAddLine = (i: number, field: keyof NewLine, value: string) => {
+    setAddLines(prev => {
       const next = [...prev];
       next[i] = { ...next[i], [field]: value };
       if (field === 'crop_id') next[i].product_variant_id = '';
@@ -149,29 +100,56 @@ export default function OrdersPage() {
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    const validLines = newLines.filter(l => l.product_variant_id);
+    const validLines = addLines.filter(l => l.product_variant_id);
     for (const line of validLines) {
       await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customer_id: modalCustomerId,
+          customer_id: addCustomerId,
           product_variant_id: line.product_variant_id,
           quantity: parseFloat(line.quantity) || 1,
           recurring: true,
         }),
       });
     }
-    setShowModal(false);
-    setModalCustomerId('');
-    setNewLines([emptyLine()]);
+    setShowAddModal(false);
+    setAddCustomerId('');
+    setAddLines([emptyLine()]);
     fetchOrders();
   };
 
-  const openModalForCustomer = (customerId: string) => {
-    setModalCustomerId(customerId);
-    setNewLines([emptyLine()]);
-    setShowModal(true);
+  // --- Edit customer orders ---
+  const openEdit = (group: CustomerGroup) => {
+    setEditGroup(group);
+    const qtyMap: Record<string, string> = {};
+    group.lines.forEach(l => { qtyMap[l.id] = String(l.quantity); });
+    setEditQty(qtyMap);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editGroup) return;
+    for (const line of editGroup.lines) {
+      const newQty = parseFloat(editQty[line.id]);
+      if (newQty && newQty !== line.quantity) {
+        await fetch(`/api/orders/${line.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity: newQty }),
+        });
+      }
+    }
+    setEditGroup(null);
+    fetchOrders();
+  };
+
+  const handleDeleteLine = async (id: string) => {
+    if (!confirm('Remove this crop from the order?')) return;
+    await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+    if (editGroup) {
+      setEditGroup({ ...editGroup, lines: editGroup.lines.filter(l => l.id !== id) });
+    }
+    fetchOrders();
   };
 
   return (
@@ -183,7 +161,7 @@ export default function OrdersPage() {
           <p className="text-sm text-gray-500 mt-1">One card per customer — all their crops in one place</p>
         </div>
         <button
-          onClick={() => { setModalCustomerId(''); setNewLines([emptyLine()]); setShowModal(true); }}
+          onClick={() => { setAddCustomerId(''); setAddLines([emptyLine()]); setShowAddModal(true); }}
           className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2.5 rounded-lg shadow transition"
         >
           + New Order
@@ -212,104 +190,42 @@ export default function OrdersPage() {
         <div className="space-y-4">
           {filtered.map(({ customer, lines }) => (
             <div key={customer.id} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-              {/* Card Header */}
               <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-100">
                 <span className="font-bold text-gray-900 text-base">{customer.name}</span>
                 <button
-                  onClick={() => openModalForCustomer(customer.id)}
-                  className="text-green-600 hover:text-green-700 text-sm font-semibold"
+                  onClick={() => openEdit({ customer, lines })}
+                  className="text-sm font-semibold text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg transition"
                 >
-                  + Add Crop
+                  Edit
                 </button>
               </div>
-
-              {/* Order Lines */}
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs uppercase text-gray-400 font-semibold border-b border-gray-100">
                     <th className="px-5 py-2 text-left">Crop</th>
                     <th className="px-5 py-2 text-left">Size</th>
                     <th className="px-5 py-2 text-center">Qty</th>
-                    <th className="px-5 py-2 text-left">Harvest</th>
                     <th className="px-5 py-2 text-center">Status</th>
-                    <th className="px-5 py-2 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {lines.map(line => {
-                    const isEditing = editingQty[line.id] !== undefined;
-                    const nextStatus = NEXT_STATUS[line.status];
-                    return (
-                      <tr key={line.id} className="hover:bg-gray-50">
-                        <td className="px-5 py-3 font-semibold text-gray-900">
-                          {line.variant?.crop.name_en ?? '—'}
-                        </td>
-                        <td className="px-5 py-3 text-gray-500">
-                          {line.variant?.size_name ?? '—'}
-                        </td>
-                        <td className="px-5 py-3 text-center">
-                          {isEditing ? (
-                            <div className="flex items-center justify-center gap-1">
-                              <input
-                                type="number"
-                                min="1"
-                                value={editingQty[line.id]}
-                                onChange={e => setEditingQty(prev => ({ ...prev, [line.id]: e.target.value }))}
-                                className="w-16 px-2 py-1 border border-green-400 rounded text-center text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                                autoFocus
-                              />
-                              <button
-                                onClick={() => handleSaveQty(line.id, customer.id)}
-                                className="text-green-600 hover:text-green-800 font-bold text-sm"
-                              >
-                                ✓
-                              </button>
-                              <button
-                                onClick={() => setEditingQty(prev => { const n = { ...prev }; delete n[line.id]; return n; })}
-                                className="text-gray-400 hover:text-gray-600 font-bold text-sm"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setEditingQty(prev => ({ ...prev, [line.id]: String(line.quantity) }))}
-                              className="font-bold text-gray-900 hover:text-green-600 hover:underline"
-                              title="Click to edit quantity"
-                            >
-                              {line.quantity}
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-5 py-3 text-gray-500">
-                          {line.expected_harvest_date
-                            ? new Date(line.expected_harvest_date).toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })
-                            : '—'}
-                        </td>
-                        <td className="px-5 py-3 text-center">
-                          <span className={`inline-block px-2.5 py-0.5 text-[10px] font-extrabold rounded-full ${STATUS_COLORS[line.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                            {line.status.replace(/_/g, ' ').toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-right space-x-2">
-                          {nextStatus && (
-                            <button
-                              onClick={() => handleAdvanceStatus(line.id, nextStatus)}
-                              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-2.5 py-1 rounded text-xs border border-gray-200"
-                            >
-                              {NEXT_LABEL[line.status]}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDelete(line.id)}
-                            className="text-red-400 hover:text-red-600 font-semibold text-xs"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {lines.map(line => (
+                    <tr key={line.id} className="hover:bg-gray-50">
+                      <td className="px-5 py-3 font-semibold text-gray-900">{line.variant?.crop.name_en ?? '—'}</td>
+                      <td className="px-5 py-3 text-gray-500">{line.variant?.size_name ?? '—'}</td>
+                      <td className="px-5 py-3 text-center font-bold text-gray-900">{line.quantity}</td>
+                      <td className="px-5 py-3 text-center">
+                        <span className={`inline-block px-2.5 py-0.5 text-[10px] font-extrabold rounded-full ${
+                          line.status === 'delivered' ? 'bg-green-50 text-green-700' :
+                          line.status === 'growing' ? 'bg-blue-50 text-blue-700' :
+                          line.status === 'ready_harvest' ? 'bg-amber-50 text-amber-700' :
+                          'bg-purple-50 text-purple-700'
+                        }`}>
+                          {line.status.replace(/_/g, ' ').toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -317,97 +233,115 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
+      {/* Add Order Modal */}
+      {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg border border-gray-200">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900">Add Order</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">✕</button>
+              <h2 className="text-xl font-bold text-gray-900">New Order</h2>
+              <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
             </div>
             <form onSubmit={handleCreateOrder} className="p-6 space-y-5">
-              {!modalCustomerId && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Customer *</label>
-                  <select
-                    required
-                    value={modalCustomerId}
-                    onChange={e => setModalCustomerId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                  >
-                    <option value="">Select Customer...</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-              )}
-              {modalCustomerId && (
-                <p className="text-sm font-semibold text-gray-700">
-                  Customer: <span className="text-green-700">{customers.find(c => c.id === modalCustomerId)?.name}</span>
-                </p>
-              )}
-
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Customer *</label>
+                <select required value={addCustomerId} onChange={e => setAddCustomerId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                  <option value="">Select Customer...</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
               <div className="space-y-3">
                 <label className="block text-xs font-semibold text-gray-600">Crops *</label>
-                {newLines.map((line, i) => {
+                {addLines.map((line, i) => {
                   const variants = crops.find(c => c.id === line.crop_id)?.variants || [];
                   return (
                     <div key={i} className="flex gap-2 items-start p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <div className="flex-1 space-y-2">
-                        <select
-                          required
-                          value={line.crop_id}
-                          onChange={e => updateNewLine(i, 'crop_id', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-green-500 outline-none"
-                        >
+                        <select required value={line.crop_id} onChange={e => updateAddLine(i, 'crop_id', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-green-500 outline-none">
                           <option value="">Select Crop...</option>
                           {crops.map(c => <option key={c.id} value={c.id}>{c.name_en}</option>)}
                         </select>
                         {line.crop_id && (
-                          <select
-                            required
-                            value={line.product_variant_id}
-                            onChange={e => updateNewLine(i, 'product_variant_id', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-green-500 outline-none"
-                          >
+                          <select required value={line.product_variant_id} onChange={e => updateAddLine(i, 'product_variant_id', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-green-500 outline-none">
                             <option value="">Select Size...</option>
-                            {variants.map(v => (
-                              <option key={v.id} value={v.id}>{v.size_name} (€{v.price_eur?.toFixed(2) ?? '0.00'})</option>
-                            ))}
+                            {variants.map(v => <option key={v.id} value={v.id}>{v.size_name} (€{v.price_eur?.toFixed(2) ?? '0.00'})</option>)}
                           </select>
                         )}
                       </div>
-                      <input
-                        type="number"
-                        min="1"
-                        required
-                        value={line.quantity}
-                        onChange={e => updateNewLine(i, 'quantity', e.target.value)}
-                        className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center bg-white focus:ring-2 focus:ring-green-500 outline-none"
-                      />
-                      {newLines.length > 1 && (
-                        <button type="button" onClick={() => setNewLines(prev => prev.filter((_, idx) => idx !== i))}
+                      <input type="number" min="1" required value={line.quantity}
+                        onChange={e => updateAddLine(i, 'quantity', e.target.value)}
+                        className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center bg-white focus:ring-2 focus:ring-green-500 outline-none" />
+                      {addLines.length > 1 && (
+                        <button type="button" onClick={() => setAddLines(prev => prev.filter((_, idx) => idx !== i))}
                           className="text-red-400 hover:text-red-600 font-bold text-lg mt-1">×</button>
                       )}
                     </div>
                   );
                 })}
-                <button type="button" onClick={() => setNewLines(prev => [...prev, emptyLine()])}
-                  className="text-green-600 hover:text-green-700 text-sm font-semibold">
-                  + Add another crop
-                </button>
+                <button type="button" onClick={() => setAddLines(prev => [...prev, emptyLine()])}
+                  className="text-green-600 hover:text-green-700 text-sm font-semibold">+ Add another crop</button>
               </div>
-
               <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                <button type="button" onClick={() => setShowModal(false)}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm">
-                  Cancel
-                </button>
+                <button type="button" onClick={() => setShowAddModal(false)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm">Cancel</button>
                 <button type="submit"
-                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg text-sm shadow">
-                  Create Order
-                </button>
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg text-sm shadow">Create Order</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Customer Orders Modal */}
+      {editGroup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg border border-gray-200">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">{editGroup.customer.name}</h2>
+              <button onClick={() => setEditGroup(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+            </div>
+            <div className="p-6 space-y-3">
+              {editGroup.lines.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-4">No crops in this order.</p>
+              ) : editGroup.lines.map(line => (
+                <div key={line.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-900 text-sm">{line.variant?.crop.name_en ?? '—'}</div>
+                    <div className="text-xs text-gray-400">{line.variant?.size_name ?? '—'}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-500 font-semibold">Qty</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editQty[line.id] ?? line.quantity}
+                      onChange={e => setEditQty(prev => ({ ...prev, [line.id]: e.target.value }))}
+                      className="w-20 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-green-500 outline-none"
+                    />
+                  </div>
+                  <button onClick={() => handleDeleteLine(line.id)}
+                    className="text-red-400 hover:text-red-600 font-bold text-sm px-2">Delete</button>
+                </div>
+              ))}
+              <button
+                onClick={() => {
+                  setEditGroup(null);
+                  setAddCustomerId(editGroup.customer.id);
+                  setAddLines([emptyLine()]);
+                  setShowAddModal(true);
+                }}
+                className="text-green-600 hover:text-green-700 text-sm font-semibold">
+                + Add another crop
+              </button>
+            </div>
+            <div className="px-6 pb-6 flex justify-end gap-3">
+              <button onClick={() => setEditGroup(null)}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm">Cancel</button>
+              <button onClick={handleSaveEdit}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg text-sm shadow">Save Changes</button>
+            </div>
           </div>
         </div>
       )}
