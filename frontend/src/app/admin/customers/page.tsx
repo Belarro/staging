@@ -47,6 +47,7 @@ export default function CustomersPage() {
     name: '',
     restaurant_name: '',
     contact_person: '',
+    contact_title: 'owner' as 'owner' | 'executive_chef' | 'chef' | 'manager',
     email: '',
     phone: '',
     whatsapp: '',
@@ -147,6 +148,7 @@ export default function CustomersPage() {
       name: '',
       restaurant_name: '',
       contact_person: '',
+      contact_title: 'owner',
       email: '',
       phone: '',
       whatsapp: '',
@@ -396,13 +398,12 @@ export default function CustomersPage() {
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[500px] overflow-y-auto">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Company/Client Name *</label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Company/Client Name</label>
                   <input
                     type="text"
-                    required
                     value={formData.name}
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
@@ -421,15 +422,30 @@ export default function CustomersPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Contact Person (Chef/Manager)</label>
-                <input
-                  type="text"
-                  value={formData.contact_person}
-                  onChange={e => setFormData({ ...formData, contact_person: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                  placeholder="e.g., Chef Pierre Granger"
-                />
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Contact Person Name</label>
+                  <input
+                    type="text"
+                    value={formData.contact_person}
+                    onChange={e => setFormData({ ...formData, contact_person: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                    placeholder="e.g., Pierre Granger"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Title</label>
+                  <select
+                    value={formData.contact_title}
+                    onChange={e => setFormData({ ...formData, contact_title: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                  >
+                    <option value="owner">Owner</option>
+                    <option value="executive_chef">Executive Chef</option>
+                    <option value="chef">Chef</option>
+                    <option value="manager">Manager</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -455,25 +471,28 @@ export default function CustomersPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">WhatsApp (For followups)</label>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">WhatsApp Number (or copy from phone)</label>
+                <div className="flex gap-2">
                   <input
                     type="text"
                     value={formData.whatsapp}
                     onChange={e => setFormData({ ...formData, whatsapp: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
                     placeholder="e.g., 491520123456"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Payment terms (Net Days)</label>
-                  <input
-                    type="number"
-                    value={formData.net_days}
-                    onChange={e => setFormData({ ...formData, net_days: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (formData.phone) {
+                        setFormData({ ...formData, whatsapp: formData.phone });
+                      }
+                    }}
+                    disabled={!formData.phone}
+                    className="px-3 py-2 bg-green-50 hover:bg-green-100 disabled:opacity-40 text-green-700 border border-green-200 rounded-lg text-sm font-semibold"
+                  >
+                    Copy
+                  </button>
                 </div>
               </div>
 
@@ -505,11 +524,12 @@ export default function CustomersPage() {
                   onChange={e => setFormData({ ...formData, status: e.target.value as any })}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
                 >
-                  <option value="prospect">Prospect (Logged Lead)</option>
-                  <option value="active">Active (Standard Customer)</option>
-                  <option value="paused">Paused (Temporarily Suspended)</option>
-                  <option value="inactive">Inactive (Terminated/Lost)</option>
+                  <option value="prospect">🔵 Prospect — Just contacted, evaluating</option>
+                  <option value="active">🟢 Active — Paying customer, orders ongoing</option>
+                  <option value="paused">🟡 Paused — Temporarily not ordering, can resume</option>
+                  <option value="inactive">⚫ Inactive — Lost customer or rejected</option>
                 </select>
+                <p className="text-xs text-gray-500 mt-1">Funnel Stage tracks the customer's buying status throughout their lifecycle.</p>
               </div>
 
               <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-3">

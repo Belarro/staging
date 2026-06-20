@@ -57,7 +57,17 @@ export async function PUT(request: NextRequest, props: Params) {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
     const { id } = await props.params;
-    const body = await request.json();
+
+    let body: any;
+    try {
+      body = await request.json();
+    } catch (parseErr) {
+      console.error('JSON parse error:', parseErr);
+      return NextResponse.json(
+        { success: false, error: 'Invalid JSON in request body' },
+        { status: 400 }
+      );
+    }
     const { name_en, name_de, flavor_en, flavor_de, status, photo_url, procedure, variants } = body;
 
     // Update crop
@@ -70,10 +80,15 @@ export async function PUT(request: NextRequest, props: Params) {
     if (photo_url !== undefined) updateData.photo_url = photo_url;
     updateData.updated_at = new Date().toISOString();
 
-    await fetchFromSupabase(`/belarro_v4_crop?id=eq.${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(updateData),
-    });
+    try {
+      await fetchFromSupabase(`/belarro_v4_crop?id=eq.${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updateData),
+      });
+    } catch (err) {
+      console.error('Error updating crop:', err);
+      throw err;
+    }
 
     // Update growth procedure
     if (procedure) {
