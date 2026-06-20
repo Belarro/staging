@@ -114,6 +114,7 @@ export default function AdminCropsPage() {
 
   // Load selected crop
   useEffect(() => {
+    console.log('useEffect triggered: selectedCropId=', selectedCropId, 'isNewCrop=', isNewCrop);
     if (selectedCropId && !isNewCrop) {
       loadCropData(selectedCropId);
     }
