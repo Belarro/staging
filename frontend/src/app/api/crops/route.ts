@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
     const body = await request.json();
-    const { name_en, name_de, flavor_en, flavor_de, status, image_url, procedure, variants } = body;
+    const { name_en, name_de, flavor_en, flavor_de, status, photo_url, procedure, variants } = body;
 
     if (!name_en || !name_de) {
       return NextResponse.json(
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
         flavor_en: flavor_en || null,
         flavor_de: flavor_de || null,
         status: status || 'active',
-        image_url: image_url || null,
+        photo_url: photo_url || null,
       }),
     });
 
