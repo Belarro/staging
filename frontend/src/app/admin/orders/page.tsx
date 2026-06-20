@@ -49,6 +49,7 @@ export default function OrdersPage() {
   // Edit modal — shows all lines for one customer
   const [editGroup, setEditGroup] = useState<CustomerGroup | null>(null);
   const [editQty, setEditQty] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
 
   const fetchOrders = async () => {
     try {
@@ -100,23 +101,29 @@ export default function OrdersPage() {
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    const validLines = addLines.filter(l => l.product_variant_id);
-    for (const line of validLines) {
-      await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_id: addCustomerId,
-          product_variant_id: line.product_variant_id,
-          quantity: parseFloat(line.quantity) || 1,
-          recurring: true,
-        }),
-      });
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const validLines = addLines.filter(l => l.product_variant_id);
+      for (const line of validLines) {
+        await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_id: addCustomerId,
+            product_variant_id: line.product_variant_id,
+            quantity: parseFloat(line.quantity) || 1,
+            recurring: true,
+          }),
+        });
+      }
+      setShowAddModal(false);
+      setAddCustomerId('');
+      setAddLines([emptyLine()]);
+      fetchOrders();
+    } finally {
+      setSubmitting(false);
     }
-    setShowAddModal(false);
-    setAddCustomerId('');
-    setAddLines([emptyLine()]);
-    fetchOrders();
   };
 
   // --- Edit customer orders ---
@@ -286,8 +293,10 @@ export default function OrdersPage() {
               <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
                 <button type="button" onClick={() => setShowAddModal(false)}
                   className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm">Cancel</button>
-                <button type="submit"
-                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-lg text-sm shadow">Create Order</button>
+                <button type="submit" disabled={submitting}
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-5 py-2 rounded-lg text-sm shadow">
+                  {submitting ? 'Saving...' : 'Create Order'}
+                </button>
               </div>
             </form>
           </div>
