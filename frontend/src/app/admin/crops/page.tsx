@@ -10,14 +10,12 @@ interface GrowthProcedure {
   cover_soil_enabled: boolean;
   stack_enabled: boolean;
   stack_days?: number;
-  growth_env_type?: 'light' | 'blackout' | 'humidity_dome';
-  growth_env_days?: number;
   humidity_dome_enabled: boolean;
   blackout_enabled?: boolean;
   blackout_days?: number;
   humidity_dome_days?: number;
-  lights_enabled?: boolean;
-  lights_days?: number;
+  light_enabled?: boolean;
+  light_days?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -86,8 +84,8 @@ export default function AdminCropsPage() {
     blackout_enabled: false,
     blackout_days: undefined,
     humidity_dome_days: undefined,
-    lights_enabled: true,
-    lights_days: undefined,
+    light_enabled: true,
+    light_days: undefined,
   });
 
   const [variants, setVariants] = useState<ProductVariant[]>([]);
@@ -144,7 +142,7 @@ export default function AdminCropsPage() {
           stack_enabled: crop.procedure.stack_enabled || false,
           humidity_dome_enabled: crop.procedure.humidity_dome_enabled || false,
           blackout_enabled: crop.procedure.blackout_enabled || false,
-          lights_enabled: crop.procedure.lights_enabled !== false,
+          light_enabled: crop.procedure.light_enabled !== false,
         } : {
           soak_enabled: false,
           soak_hours: undefined,
@@ -157,8 +155,8 @@ export default function AdminCropsPage() {
           blackout_enabled: false,
           blackout_days: undefined,
           humidity_dome_days: undefined,
-          lights_enabled: true,
-          lights_days: undefined,
+          light_enabled: true,
+          light_days: undefined,
         });
         setVariants(crop.variants || []);
       }
@@ -287,8 +285,8 @@ export default function AdminCropsPage() {
       blackout_enabled: false,
       blackout_days: undefined,
       humidity_dome_days: undefined,
-      lights_enabled: true,
-      lights_days: undefined,
+      light_enabled: true,
+      light_days: undefined,
     });
     setVariants([]);
   };
@@ -319,7 +317,7 @@ export default function AdminCropsPage() {
     if (procedure.stack_enabled && procedure.stack_days) {
       days += procedure.stack_days;
     }
-    const lightsDays = procedure.lights_enabled ? (procedure.lights_days || 0) : 0;
+    const lightsDays = procedure.light_enabled ? (procedure.light_days || 0) : 0;
     if (lightsDays > 0) {
       days += lightsDays;
     } else if (procedure.blackout_enabled && procedure.blackout_days) {
@@ -732,13 +730,13 @@ export default function AdminCropsPage() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          {procedure.lights_enabled ? "Concurrent/included in lights duration (not added to total)." : "Calculated in total since lights are disabled."}
+                          {procedure.light_enabled ? "Concurrent/included in lights duration (not added to total)." : "Calculated in total since lights are disabled."}
                         </p>
                       </div>
                     )}
                     {procedure.blackout_enabled && !isEditing && (
                       <p className="ml-7 text-sm text-gray-700">
-                        {procedure.blackout_days} days ({procedure.lights_enabled ? "concurrent" : "adds to total growth"})
+                        {procedure.blackout_days} days ({procedure.light_enabled ? "concurrent" : "adds to total growth"})
                       </p>
                     )}
                   </div>
@@ -784,11 +782,11 @@ export default function AdminCropsPage() {
                     <label className="flex items-center gap-3 cursor-pointer mb-3">
                       <input
                         type="checkbox"
-                        checked={procedure.lights_enabled !== false}
+                        checked={procedure.light_enabled !== false}
                         onChange={(e) => setProcedure({ 
                           ...procedure, 
-                          lights_enabled: e.target.checked,
-                          lights_days: e.target.checked ? (procedure.lights_days || 7) : undefined 
+                          light_enabled: e.target.checked,
+                          light_days: e.target.checked ? (procedure.light_days || 7) : undefined 
                         })}
                         disabled={!isEditing}
                         className="w-4 h-4"
@@ -796,22 +794,22 @@ export default function AdminCropsPage() {
                       <span className="text-lg">💡</span>
                       <span className="font-semibold text-gray-900 flex-1">Lights Stage</span>
                     </label>
-                    {(procedure.lights_enabled !== false) && isEditing && (
+                    {(procedure.light_enabled !== false) && isEditing && (
                       <div className="ml-7">
                         <label className="block text-xs font-medium text-gray-700 mb-1">Duration (Days)</label>
                         <input
                           type="number"
                           min="1"
                           placeholder="Days"
-                          value={procedure.lights_days || ''}
-                          onChange={(e) => setProcedure({ ...procedure, lights_days: e.target.value ? parseInt(e.target.value) : undefined })}
+                          value={procedure.light_days || ''}
+                          onChange={(e) => setProcedure({ ...procedure, light_days: e.target.value ? parseInt(e.target.value) : undefined })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                         />
                         <p className="text-xs text-gray-500 mt-1">Main lights growth stage. Calculated in total growth days.</p>
                       </div>
                     )}
-                    {(procedure.lights_enabled !== false) && !isEditing && (
-                      <p className="ml-7 text-sm text-gray-700">{procedure.lights_days} days (adds to total growth)</p>
+                    {(procedure.light_enabled !== false) && !isEditing && (
+                      <p className="ml-7 text-sm text-gray-700">{procedure.light_days} days (adds to total growth)</p>
                     )}
                   </div>
 
