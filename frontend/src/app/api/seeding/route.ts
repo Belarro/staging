@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     let growthDays = 10;
     if (procedure && procedure.length > 0) {
       const p = procedure[0];
-      const lightsDays = p.lights_enabled ? (p.lights_days || 0) : 0;
+      const lightsDays = p.light_enabled ? (p.light_days || 0) : 0;
       let envDays = 0;
       if (lightsDays > 0) {
         envDays = lightsDays;
