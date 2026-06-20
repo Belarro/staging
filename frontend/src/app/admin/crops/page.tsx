@@ -147,8 +147,6 @@ export default function AdminCropsPage() {
           cover_soil_enabled: false,
           stack_enabled: false,
           stack_days: undefined,
-          growth_env_type: 'light',
-          growth_env_days: 0,
           humidity_dome_enabled: false,
           blackout_enabled: false,
           blackout_days: undefined,
@@ -179,11 +177,6 @@ export default function AdminCropsPage() {
   const handleSave = async () => {
     if (!formData.name_en || !formData.name_de) {
       showToast('Name (EN) and Name (DE) are required', 'error');
-      return;
-    }
-
-    if (!procedure.growth_env_days || procedure.growth_env_days <= 0) {
-      showToast('Growth environment days must be greater than 0', 'error');
       return;
     }
 
@@ -277,8 +270,6 @@ export default function AdminCropsPage() {
       cover_soil_enabled: false,
       stack_enabled: false,
       stack_days: undefined,
-      growth_env_type: 'light',
-      growth_env_days: 0,
       humidity_dome_enabled: false,
       blackout_enabled: false,
       blackout_days: undefined,
@@ -321,7 +312,6 @@ export default function AdminCropsPage() {
     } else if (procedure.blackout_enabled && procedure.blackout_days) {
       days += procedure.blackout_days;
     } else {
-      days += procedure.growth_env_days || 0;
     }
     return days;
   };
