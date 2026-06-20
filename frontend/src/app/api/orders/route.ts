@@ -37,11 +37,11 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customer_id');
     const status = searchParams.get('status');
 
-    let path = '/belarro_v4_order?select=*&order=created_at.desc';
+    let path = '/belarro_v4_order?deleted_at=is.null&select=*&order=created_at.desc';
     if (customerId) {
-      path = `/belarro_v4_order?customer_id=eq.${customerId}&select=*&order=created_at.desc`;
+      path = `/belarro_v4_order?deleted_at=is.null&customer_id=eq.${customerId}&select=*&order=created_at.desc`;
     } else if (status) {
-      path = `/belarro_v4_order?status=eq.${status}&select=*&order=created_at.desc`;
+      path = `/belarro_v4_order?deleted_at=is.null&status=eq.${status}&select=*&order=created_at.desc`;
     }
 
     try {
