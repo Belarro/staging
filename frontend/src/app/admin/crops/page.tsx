@@ -339,9 +339,9 @@ export default function AdminCropsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen bg-gray-50 overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-8 py-6 flex justify-between items-center sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-200 px-8 py-6 flex justify-between items-center flex-shrink-0">
         <h1 className="text-3xl font-bold text-gray-900">Crops</h1>
         <button
           onClick={handleNewCrop}
@@ -352,7 +352,7 @@ export default function AdminCropsPage() {
       </div>
 
       {/* Main grid */}
-      <div className="grid grid-cols-[350px_1fr] gap-6 h-[calc(100vh-120px)] p-6">
+      <div className="grid grid-cols-[350px_1fr] gap-6 flex-1 p-6 overflow-hidden">
         {/* LEFT: Crop list */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col">
           {/* Search */}
