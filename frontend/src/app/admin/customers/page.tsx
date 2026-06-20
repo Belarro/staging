@@ -166,6 +166,7 @@ export default function CustomersPage() {
       name: c.name,
       restaurant_name: c.restaurant_name || '',
       contact_person: c.contact_person || '',
+      contact_title: 'owner',
       email: c.email || '',
       phone: c.phone || '',
       whatsapp: c.whatsapp || '',
