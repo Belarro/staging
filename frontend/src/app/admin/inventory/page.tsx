@@ -6,12 +6,15 @@ interface SeedInventory {
   id: string;
   crop_id: string;
   quantity_grams: number;
+  seeds_per_tray: number;
   reorder_threshold_trays: number;
   crop: {
     name_en: string;
     name_de: string;
   };
 }
+
+interface Crop { id: string; name_en: string; }
 
 interface PackageInventory {
   id: string;
@@ -39,23 +42,35 @@ export default function InventoryPage() {
   const [seeds, setSeeds] = useState<SeedInventory[]>([]);
   const [packages, setPackages] = useState<PackageInventory[]>([]);
   const [samples, setSamples] = useState<SampleInventory[]>([]);
+  const [crops, setCrops] = useState<Crop[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [activeTab, setActiveTab] = useState<'seeds' | 'packages' | 'samples'>('seeds');
 
   const [editId, setEditId] = useState<string | null>(null);
   const [editQty, setEditQty] = useState<string>('');
 
+  const [showAddSeed, setShowAddSeed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [seedForm, setSeedForm] = useState({
+    crop_id: '',
+    quantity_grams: '',
+    seeds_per_tray: '',
+    reorder_threshold_trays: '20'
+  });
+
   const fetchInventory = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/inventory');
-      const json = await res.json();
-      if (json.success) {
-        setSeeds(json.data.seeds || []);
-        setPackages(json.data.packages || []);
-        setSamples(json.data.samples || []);
+      const [invRes, cropRes] = await Promise.all([fetch('/api/inventory'), fetch('/api/crops')]);
+      const invJson = await invRes.json();
+      const cropJson = await cropRes.json();
+      if (invJson.success) {
+        setSeeds(invJson.data.seeds || []);
+        setPackages(invJson.data.packages || []);
+        setSamples(invJson.data.samples || []);
       }
+      if (cropJson.success) setCrops(cropJson.data || []);
     } catch (err) {
       console.error('Failed to load inventory:', err);
     } finally {
@@ -63,9 +78,28 @@ export default function InventoryPage() {
     }
   };
 
-  useEffect(() => {
-    fetchInventory();
-  }, []);
+  useEffect(() => { fetchInventory(); }, []);
+
+  const handleAddSeed = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(seedForm)
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowAddSeed(false);
+        setSeedForm({ crop_id: '', quantity_grams: '', seeds_per_tray: '', reorder_threshold_trays: '20' });
+        fetchInventory();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleSaveQty = async (type: 'seeds' | 'packages' | 'samples', id: string) => {
     try {
@@ -91,9 +125,19 @@ export default function InventoryPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Farm Inventory</h1>
-        <p className="text-sm text-gray-500 mt-1">Manage seed stocks, boxes/containers, and sample materials</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Farm Inventory</h1>
+          <p className="text-sm text-gray-500 mt-1">Manage seed stocks, boxes/containers, and sample materials</p>
+        </div>
+        {activeTab === 'seeds' && (
+          <button
+            onClick={() => setShowAddSeed(true)}
+            className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2.5 rounded-lg shadow transition"
+          >
+            + Add Seed
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -127,15 +171,17 @@ export default function InventoryPage() {
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-xs uppercase text-gray-500 font-semibold">
                   <th className="p-4">Crop / Seed Type</th>
-                  <th className="p-4 text-center">Remaining Stock (Grams)</th>
-                  <th className="p-4 text-center">Approx. Trays Ready</th>
-                  <th className="p-4 text-center">Reorder Threshold</th>
+                  <th className="p-4 text-center">Stock (Grams)</th>
+                  <th className="p-4 text-center">Grams / Tray</th>
+                  <th className="p-4 text-center">Trays Available</th>
+                  <th className="p-4 text-center">Reorder At</th>
                   <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {seeds.map(s => {
-                  const remainingTrays = Math.floor(s.quantity_grams / 60); // Assuming 60g per tray
+                  const gramsPerTray = s.seeds_per_tray || 60;
+                  const remainingTrays = Math.floor(s.quantity_grams / gramsPerTray);
                   const isLow = remainingTrays < s.reorder_threshold_trays;
                   return (
                     <tr key={s.id} className="hover:bg-gray-50">
@@ -154,11 +200,14 @@ export default function InventoryPage() {
                           </span>
                         )}
                       </td>
-                      <td className="p-4 text-center font-medium">
-                        {remainingTrays} trays
+                      <td className="p-4 text-center text-gray-500 font-medium">
+                        {gramsPerTray}g
+                      </td>
+                      <td className="p-4 text-center font-bold">
+                        <span className={isLow ? 'text-red-600' : 'text-gray-900'}>{remainingTrays}</span>
                       </td>
                       <td className="p-4 text-center text-gray-500 font-semibold">
-                        {s.reorder_threshold_trays} trays
+                        {s.reorder_threshold_trays}
                       </td>
                       <td className="p-4 text-right">
                         {editId === s.id ? (
@@ -317,6 +366,73 @@ export default function InventoryPage() {
             </table>
           )}
 
+        </div>
+      )}
+      {/* Add Seed Modal */}
+      {showAddSeed && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md border border-gray-200">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Add Seed Stock</h2>
+              <button onClick={() => setShowAddSeed(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+            </div>
+            <form onSubmit={handleAddSeed} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Crop *</label>
+                <select
+                  required
+                  value={seedForm.crop_id}
+                  onChange={e => setSeedForm({ ...seedForm, crop_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                >
+                  <option value="">Select Crop...</option>
+                  {crops.map(c => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Current Stock (grams) *</label>
+                <input
+                  type="number" min="0" required
+                  value={seedForm.quantity_grams}
+                  onChange={e => setSeedForm({ ...seedForm, quantity_grams: e.target.value })}
+                  placeholder="e.g. 500"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Grams of seed per tray *</label>
+                <input
+                  type="number" min="1" required
+                  value={seedForm.seeds_per_tray}
+                  onChange={e => setSeedForm({ ...seedForm, seeds_per_tray: e.target.value })}
+                  placeholder="e.g. 60"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                />
+                {seedForm.quantity_grams && seedForm.seeds_per_tray && (
+                  <p className="text-xs text-green-700 font-semibold mt-1">
+                    = {Math.floor(parseFloat(seedForm.quantity_grams) / parseFloat(seedForm.seeds_per_tray))} trays available
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Reorder when below (trays)</label>
+                <input
+                  type="number" min="1"
+                  value={seedForm.reorder_threshold_trays}
+                  onChange={e => setSeedForm({ ...seedForm, reorder_threshold_trays: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                />
+              </div>
+              <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
+                <button type="button" onClick={() => setShowAddSeed(false)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm">Cancel</button>
+                <button type="submit" disabled={submitting}
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-lg text-sm shadow">
+                  {submitting ? 'Saving...' : 'Save Seed'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
