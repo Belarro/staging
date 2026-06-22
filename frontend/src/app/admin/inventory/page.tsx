@@ -241,7 +241,7 @@ export default function InventoryPage() {
                             <button
                               onClick={() => { setEditId(s.id); setEditQty(s.quantity_grams.toString()); setEditMode('set'); }}
                               className="bg-gray-50 hover:bg-gray-100 text-gray-600 font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-xs"
-                            >Set</button>
+                            >Edit</button>
                           </div>
                         )}
                       </td>
