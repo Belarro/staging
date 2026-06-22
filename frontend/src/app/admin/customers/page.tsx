@@ -328,9 +328,9 @@ export default function CustomersPage() {
           {filteredCustomers.map(c => (
             <div key={c.id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-bold text-gray-900">{c.name}</h3>
+                <h3 className="text-lg font-bold text-gray-900">{c.restaurant_name || c.name}</h3>
                 {c.restaurant_name && (
-                  <p className="text-xs text-gray-500 font-medium">{c.restaurant_name}</p>
+                  <p className="text-xs text-gray-500 font-medium">{c.name}</p>
                 )}
                 {c.contact_person && (
                   <div className="mt-3 flex items-center gap-1.5 text-xs text-gray-600">
