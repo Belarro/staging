@@ -63,6 +63,9 @@ export default function FollowUpsPage() {
 
   const [convertId, setConvertId] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
+  const [snoozeId, setSnoozeId] = useState<string | null>(null);
+  const [snoozing, setSnoozing] = useState(false);
+  const [snoozeSuccess, setSnoozeSuccess] = useState<string | null>(null);
 
   const fetchFollowups = async () => {
     try {
@@ -134,6 +137,27 @@ export default function FollowUpsPage() {
       }
     } finally {
       setConverting(false);
+    }
+  };
+
+  const handleSnooze = async (locationId: string) => {
+    if (snoozing) return;
+    setSnoozing(true);
+    try {
+      const res = await fetch('/api/locations/snooze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location_id: locationId }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setSnoozeId(null);
+        setSnoozeSuccess(json.wake_date);
+        fetchFollowups();
+        setTimeout(() => setSnoozeSuccess(null), 4000);
+      }
+    } finally {
+      setSnoozing(false);
     }
   };
 
@@ -251,6 +275,12 @@ export default function FollowUpsPage() {
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-1.5 rounded-lg text-xs transition"
               >
                 Log Contact
+              </button>
+              <button
+                onClick={() => setSnoozeId(f.location_id)}
+                className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold py-1.5 rounded-lg text-xs transition border border-amber-200"
+              >
+                Not Now
               </button>
               <button
                 onClick={() => setConvertId(f.location_id)}
@@ -438,6 +468,37 @@ export default function FollowUpsPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Snooze confirmation */}
+      {snoozeId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Not interested right now?</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              We'll pause all follow-ups and automatically remind you to reach out again in <strong>90 days</strong> with a fresh message.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setSnoozeId(null)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 rounded-lg text-sm">
+                Cancel
+              </button>
+              <button
+                onClick={() => handleSnooze(snoozeId)}
+                disabled={snoozing}
+                className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm">
+                {snoozing ? 'Saving...' : 'Snooze 90 days'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Snooze success toast */}
+      {snoozeSuccess && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-xl z-50">
+          Snoozed — will reappear on {new Date(snoozeSuccess).toLocaleDateString('en-DE', { day: 'numeric', month: 'long', year: 'numeric' })}
         </div>
       )}
 
