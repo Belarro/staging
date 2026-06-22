@@ -28,6 +28,20 @@ interface FollowUp {
   };
 }
 
+// Berlin landlines: 030..., 030..., +4930... — cannot receive WhatsApp
+// Mobile (WhatsApp-capable): 01..., +491..., 1...
+function isLandline(phone: string | null): boolean {
+  if (!phone) return false;
+  const digits = phone.replace(/[\s\-\+\(\)]/g, '');
+  // International: 4930... = Berlin landline
+  if (/^4930/.test(digits)) return true;
+  // Local: 030...
+  if (/^030/.test(digits)) return true;
+  // Any 0[2-9] area code (not 01x mobile prefix)
+  if (/^0[2-9]/.test(digits)) return true;
+  return false;
+}
+
 const STAGE_COLORS: Record<number, string> = {
   1: 'bg-purple-100 text-purple-700',
   2: 'bg-blue-100 text-blue-700',
@@ -137,7 +151,8 @@ export default function FollowUpsPage() {
     const isOverdue = f.status === 'pending' && new Date(f.due_date) < now;
     const restaurantName = f.location.name;
     const contactName = f.location.contact_person || f.location.name;
-    const hasWhatsApp = !!(f.whatsapp_number);
+    const landline = isLandline(f.whatsapp_number || f.location.phone);
+    const hasWhatsApp = !!(f.whatsapp_number) && !landline;
 
     return (
       <div className={`bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4 hover:shadow-md transition ${isOverdue ? 'border-red-300' : 'border-gray-200'}`}>
@@ -175,7 +190,12 @@ export default function FollowUpsPage() {
 
         {/* Contact info */}
         <div className="text-xs text-gray-500 space-y-1">
-          {f.whatsapp_number && <div>💬 {f.whatsapp_number}</div>}
+          {f.whatsapp_number && (
+            <div className="flex items-center gap-1.5">
+              {landline ? '📞' : '💬'} {f.whatsapp_number}
+              {landline && <span className="px-1.5 py-0.5 text-[9px] font-bold bg-orange-100 text-orange-700 rounded">Landline</span>}
+            </div>
+          )}
           {f.location.email && <div>📧 {f.location.email}</div>}
           <div className={`font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-600'}`}>
             Due: {new Date(f.due_date).toLocaleDateString('en-DE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -195,13 +215,17 @@ export default function FollowUpsPage() {
           <div className="flex flex-col gap-2">
             {/* Primary contact buttons */}
             <div className="flex gap-2">
-              {f.whatsapp_number ? (
+              {f.whatsapp_number && !landline ? (
                 <button
                   onClick={() => { setSelected(f); setShowMessage(true); }}
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg text-sm transition flex items-center justify-center gap-1.5"
                 >
                   💬 WhatsApp
                 </button>
+              ) : f.whatsapp_number && landline ? (
+                <div className="flex-1 bg-orange-50 border border-orange-200 text-orange-700 font-semibold py-2 rounded-lg text-sm flex items-center justify-center gap-1.5">
+                  📞 Landline — call only
+                </div>
               ) : null}
               {f.location.email ? (
                 <button
@@ -316,7 +340,7 @@ export default function FollowUpsPage() {
                 >
                   Copy
                 </button>
-                {selected.whatsapp_number && (
+                {selected.whatsapp_number && !isLandline(selected.whatsapp_number || selected.location.phone) && (
                   <button
                     onClick={() => openWhatsApp(selected)}
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg text-sm transition"
