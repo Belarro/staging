@@ -258,7 +258,7 @@ export default function FollowUpsPage() {
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">{selected.message_title}</h2>
-                <p className="text-xs text-gray-500">{selected.customer.restaurant_name || selected.customer.name}</p>
+                <p className="text-xs text-gray-500">{selected.location.name}</p>
               </div>
               <button onClick={() => { setShowMessage(false); setSelected(null); }} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
             </div>
