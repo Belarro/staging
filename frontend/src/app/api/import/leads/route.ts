@@ -42,10 +42,21 @@ export async function POST(request: NextRequest) {
         );
         if (existing && existing.length > 0) { skipped++; continue; }
 
-        const visitDate = row.visited_at ? new Date(row.visited_at).toISOString() : new Date().toISOString();
+        // Parse date — handle formats like "29-10-2025 14:25", "29/10/2025", ISO, etc.
+        let visitDate = new Date().toISOString();
+        if (row.visited_at) {
+          // Try swapping DD-MM-YYYY or DD/MM/YYYY to YYYY-MM-DD
+          const cleaned = row.visited_at.trim()
+            .replace(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/, '$3-$2-$1')
+            .replace(' ', 'T');
+          const parsed = new Date(cleaned);
+          if (!isNaN(parsed.getTime())) {
+            visitDate = parsed.toISOString();
+          }
+        }
         const customerId = crypto.randomUUID();
 
-        // Create customer as lead
+        // Create customer as lead — only columns that exist in belarro_v4_customer
         await fetchFromSupabase('/belarro_v4_customer', {
           method: 'POST',
           body: JSON.stringify({
@@ -53,15 +64,10 @@ export async function POST(request: NextRequest) {
             name: row.contact_person || row.restaurant_name,
             restaurant_name: row.restaurant_name,
             contact_person: row.contact_person || null,
-            contact_title: row.contact_title || null,
             phone: row.phone || null,
             whatsapp: row.whatsapp || row.phone || null,
             email: row.email || null,
             address: row.address || null,
-            business_type: row.business_type || null,
-            interest_level: row.interest_level || null,
-            notes: row.visit_notes || null,
-            language: row.language || 'en',
             status: 'lead',
             first_contact_date: visitDate,
             created_at: visitDate,
