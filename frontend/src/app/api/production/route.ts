@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       fetchFromSupabase('/belarro_v4_order?status=in.(pending_seed,growing)&select=*'),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
-      fetchFromSupabase('/belarro_v4_growth_procedure?select=*'),
+      fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,blackout_days,light_days'),
       fetchFromSupabase('/belarro_v4_customer?select=id,name&deleted_at=is.null'),
       fetchFromSupabase('/belarro_v4_seeding_batch?select=*'),
       fetchFromSupabase('/belarro_v4_harvest_record?select=*'),
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
         const crop = variant ? cropMap.get(variant.crop_id) : null;
         const proc = crop ? procMap.get(crop.id) : null;
         const growDays = proc
-          ? (proc.stack_days || 0) + (proc.growth_env_days || 0)
+          ? (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0)
           : 0;
         return { order, crop, growDays: growDays > 0 ? growDays : null };
       }).filter((l: any) => l.crop); // skip lines with no crop
