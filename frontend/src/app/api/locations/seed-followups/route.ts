@@ -27,16 +27,8 @@ export async function POST(request: NextRequest) {
       if (existing && existing.length > 0) { skipped++; continue; }
 
       // Parse visit date
-      let base = new Date();
-      if (loc.timestamp) {
-        const cleaned = String(loc.timestamp).trim()
-          .replace(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/, '$3-$2-$1')
-          .replace(' ', 'T');
-        const parsed = new Date(cleaned);
-        if (!isNaN(parsed.getTime())) base = parsed;
-      } else if (loc.created_at) {
-        base = new Date(loc.created_at);
-      }
+      // Always schedule from now — if visit was in the past, start fresh
+      const base = new Date();
 
       const stages = [
         { stage: 1, follow_up_number: 1, follow_up_days: 0,  offset: 2 * 60 * 60 * 1000 },
