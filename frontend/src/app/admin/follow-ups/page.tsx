@@ -188,13 +188,33 @@ export default function FollowUpsPage() {
         {/* Actions */}
         {f.status === 'pending' && (
           <div className="flex flex-col gap-2">
-            {/* WhatsApp button — primary action */}
-            <button
-              onClick={() => { setSelected(f); setShowMessage(true); }}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg text-sm transition flex items-center justify-center gap-2"
-            >
-              💬 Send WhatsApp Message
-            </button>
+            {/* Primary contact buttons */}
+            <div className="flex gap-2">
+              {f.whatsapp_number ? (
+                <button
+                  onClick={() => { setSelected(f); setShowMessage(true); }}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg text-sm transition flex items-center justify-center gap-1.5"
+                >
+                  💬 WhatsApp
+                </button>
+              ) : null}
+              {f.location.email ? (
+                <button
+                  onClick={() => { setSelected(f); setShowMessage(true); }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-sm transition flex items-center justify-center gap-1.5"
+                >
+                  📧 Email
+                </button>
+              ) : null}
+              {!f.whatsapp_number && !f.location.email && (
+                <button
+                  onClick={() => { setSelected(f); setShowMessage(true); }}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-lg text-sm transition"
+                >
+                  Copy Message
+                </button>
+              )}
+            </div>
 
             <div className="flex gap-2">
               <button
@@ -284,26 +304,32 @@ export default function FollowUpsPage() {
                 {selected.message_text}
               </div>
 
-              <div className="flex gap-3">
-                {/* Copy button */}
+              <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => navigator.clipboard.writeText(selected.message_text)}
                   className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg text-sm transition"
                 >
-                  Copy Message
+                  Copy
                 </button>
-                {/* Open WhatsApp */}
-                {selected.whatsapp_number ? (
+                {selected.whatsapp_number && (
                   <button
                     onClick={() => openWhatsApp(selected)}
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg text-sm transition"
                   >
-                    Open WhatsApp ↗
+                    💬 WhatsApp ↗
                   </button>
-                ) : (
-                  <div className="flex-1 text-xs text-center text-gray-400 flex items-center justify-center">
-                    No WhatsApp number saved
-                  </div>
+                )}
+                {selected.location.email && (
+                  <button
+                    onClick={() => {
+                      const subject = encodeURIComponent('Belarro Microgreens');
+                      const body = encodeURIComponent(selected.message_text);
+                      window.open(`mailto:${selected.location.email}?subject=${subject}&body=${body}`, '_blank');
+                    }}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-sm transition"
+                  >
+                    📧 Email ↗
+                  </button>
                 )}
               </div>
 
