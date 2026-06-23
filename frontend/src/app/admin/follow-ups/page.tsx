@@ -215,10 +215,7 @@ export default function FollowUpsPage() {
         {/* Contact info */}
         <div className="text-xs text-gray-500 space-y-1">
           {f.whatsapp_number && (
-            <div className="flex items-center gap-1.5">
-              {landline ? '📞' : '💬'} {f.whatsapp_number}
-              {landline && <span className="px-1.5 py-0.5 text-[9px] font-bold bg-orange-100 text-orange-700 rounded">Landline</span>}
-            </div>
+            <div>{landline ? '📞' : '💬'} {f.whatsapp_number}</div>
           )}
           {f.location.email && <div>📧 {f.location.email}</div>}
           <div className={`font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-600'}`}>
@@ -246,10 +243,6 @@ export default function FollowUpsPage() {
                 >
                   💬 WhatsApp
                 </button>
-              ) : f.whatsapp_number && landline ? (
-                <div className="flex-1 bg-orange-50 border border-orange-200 text-orange-700 font-semibold py-2 rounded-lg text-sm flex items-center justify-center gap-1.5">
-                  📞 Landline — call only
-                </div>
               ) : null}
               {f.location.email ? (
                 <button
