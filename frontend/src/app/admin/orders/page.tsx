@@ -25,8 +25,8 @@ interface Crop {
   variants?: Array<{ id: string; size_name: string; price_eur: number }>;
 }
 
-interface NewLine { crop_id: string; product_variant_id: string; quantity: string }
-const emptyLine = (): NewLine => ({ crop_id: '', product_variant_id: '', quantity: '1' });
+interface NewLine { crop_id: string; product_variant_id: string; quantity: string; frequency: 'weekly' | 'biweekly' }
+const emptyLine = (): NewLine => ({ crop_id: '', product_variant_id: '', quantity: '1', frequency: 'weekly' });
 
 // Customer group with editable lines
 interface CustomerGroup {
@@ -49,6 +49,7 @@ export default function OrdersPage() {
   // Edit modal — shows all lines for one customer
   const [editGroup, setEditGroup] = useState<CustomerGroup | null>(null);
   const [editQty, setEditQty] = useState<Record<string, string>>({});
+  const [editFreq, setEditFreq] = useState<Record<string, 'weekly' | 'biweekly'>>({});
   const [submitting, setSubmitting] = useState(false);
 
   const fetchOrders = async () => {
@@ -116,6 +117,7 @@ export default function OrdersPage() {
             product_variant_id: line.product_variant_id,
             quantity: parseFloat(line.quantity) || 1,
             recurring: true,
+            frequency: line.frequency || 'weekly',
           }),
         });
       }
@@ -132,8 +134,13 @@ export default function OrdersPage() {
   const openEdit = (group: CustomerGroup) => {
     setEditGroup(group);
     const qtyMap: Record<string, string> = {};
-    group.lines.forEach(l => { qtyMap[l.id] = String(l.quantity); });
+    const freqMap: Record<string, 'weekly' | 'biweekly'> = {};
+    group.lines.forEach(l => {
+      qtyMap[l.id] = String(l.quantity);
+      freqMap[l.id] = (l as any).frequency === 'biweekly' ? 'biweekly' : 'weekly';
+    });
     setEditQty(qtyMap);
+    setEditFreq(freqMap);
   };
 
   const handleSaveEdit = async () => {
@@ -142,11 +149,13 @@ export default function OrdersPage() {
     try {
       for (const line of editGroup.lines) {
         const newQty = parseFloat(editQty[line.id]);
-        if (newQty && newQty !== line.quantity) {
+        const newFreq = editFreq[line.id] || 'weekly';
+        const freqChanged = newFreq !== ((line as any).frequency || 'weekly');
+        if ((newQty && newQty !== line.quantity) || freqChanged) {
           await fetch(`/api/orders/${line.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ quantity: newQty }),
+            body: JSON.stringify({ quantity: newQty || line.quantity, frequency: newFreq }),
           });
         }
       }
@@ -232,7 +241,7 @@ export default function OrdersPage() {
                     <th className="px-5 py-2 text-left">Crop</th>
                     <th className="px-5 py-2 text-left">Size</th>
                     <th className="px-5 py-2 text-center">Qty</th>
-                    <th className="px-5 py-2 text-center">Status</th>
+                    <th className="px-5 py-2 text-center">Delivery</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -242,14 +251,10 @@ export default function OrdersPage() {
                       <td className="px-5 py-3 text-gray-500">{line.variant?.size_name ?? '—'}</td>
                       <td className="px-5 py-3 text-center font-bold text-gray-900">{line.quantity}</td>
                       <td className="px-5 py-3 text-center">
-                        <span className={`inline-block px-2.5 py-0.5 text-[10px] font-extrabold rounded-full ${
-                          line.status === 'delivered' ? 'bg-green-50 text-green-700' :
-                          line.status === 'growing' ? 'bg-blue-50 text-blue-700' :
-                          line.status === 'ready_harvest' ? 'bg-amber-50 text-amber-700' :
-                          'bg-purple-50 text-purple-700'
-                        }`}>
-                          {line.status.replace(/_/g, ' ').toUpperCase()}
-                        </span>
+                        {(line as any).frequency === 'biweekly'
+                          ? <span className="inline-block px-2.5 py-0.5 text-[10px] font-extrabold rounded-full bg-amber-50 text-amber-700">Every 2 weeks</span>
+                          : <span className="inline-block px-2.5 py-0.5 text-[10px] font-extrabold rounded-full bg-green-50 text-green-700">Weekly</span>
+                        }
                       </td>
                     </tr>
                   ))}
@@ -300,6 +305,13 @@ export default function OrdersPage() {
                       <input type="number" min="1" required value={line.quantity}
                         onChange={e => updateAddLine(i, 'quantity', e.target.value)}
                         className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center bg-white focus:ring-2 focus:ring-green-500 outline-none" />
+                      <button
+                        type="button"
+                        onClick={() => updateAddLine(i, 'frequency', line.frequency === 'biweekly' ? 'weekly' : 'biweekly')}
+                        className={`text-xs font-bold px-2 py-2 rounded-lg border transition whitespace-nowrap ${line.frequency === 'biweekly' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-green-50 border-green-200 text-green-700'}`}
+                      >
+                        {line.frequency === 'biweekly' ? '2 weeks' : 'Weekly'}
+                      </button>
                       {addLines.length > 1 && (
                         <button type="button" onClick={() => setAddLines(prev => prev.filter((_, idx) => idx !== i))}
                           className="text-red-400 hover:text-red-600 font-bold text-lg mt-1">×</button>
@@ -341,14 +353,20 @@ export default function OrdersPage() {
                     <div className="text-xs text-gray-400">{line.variant?.size_name ?? '—'}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="text-xs text-gray-500 font-semibold">Qty</label>
                     <input
                       type="number"
                       min="1"
                       value={editQty[line.id] ?? line.quantity}
                       onChange={e => setEditQty(prev => ({ ...prev, [line.id]: e.target.value }))}
-                      className="w-20 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-green-500 outline-none"
+                      className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:ring-2 focus:ring-green-500 outline-none"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setEditFreq(prev => ({ ...prev, [line.id]: prev[line.id] === 'biweekly' ? 'weekly' : 'biweekly' }))}
+                      className={`text-xs font-bold px-2 py-1.5 rounded-lg border transition whitespace-nowrap ${editFreq[line.id] === 'biweekly' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-green-50 border-green-200 text-green-700'}`}
+                    >
+                      {editFreq[line.id] === 'biweekly' ? '2 weeks' : 'Weekly'}
+                    </button>
                   </div>
                   <button onClick={() => handleDeleteLine(line.id)}
                     className="text-red-400 hover:text-red-600 font-bold text-sm px-2">Delete</button>

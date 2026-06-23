@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
     const body = await request.json();
-    const { customer_id, product_variant_id, quantity, recurring } = body;
+    const { customer_id, product_variant_id, quantity, recurring, frequency } = body;
 
     if (!customer_id || !product_variant_id || quantity === undefined) {
       return NextResponse.json(
@@ -167,8 +167,9 @@ export async function POST(request: NextRequest) {
         order_date: orderDate.toISOString(),
         expected_harvest_date: harvestDate.toISOString(),
         next_delivery_date: nextDeliveryDate.toISOString(),
-        status: 'pending_seed',
-        recurring: recurring === true || recurring === 'true'
+        status: 'active',
+        recurring: true,
+        frequency: frequency === 'biweekly' ? 'biweekly' : 'weekly'
       })
     });
 
