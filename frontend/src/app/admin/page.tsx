@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import FollowUpWidget from '@/components/FollowUpWidget';
 
 interface DashboardData {
   overview: {
@@ -92,8 +91,13 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Today's follow-ups — first thing Ron sees */}
-      <FollowUpWidget />
+      {/* Today's follow-ups — summary only */}
+      {data && (data.operations.pending_follow_ups > 0) && (
+        <Link href="/admin/follow-ups" className="block bg-green-600 hover:bg-green-700 text-white rounded-xl px-6 py-4 flex items-center justify-between transition">
+          <span className="font-semibold text-base">Follow-ups due today</span>
+          <span className="text-3xl font-extrabold">{data.operations.pending_follow_ups}</span>
+        </Link>
+      )}
 
       {/* Header */}
       <div>
