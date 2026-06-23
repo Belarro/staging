@@ -25,15 +25,11 @@ export async function GET(request: NextRequest, props: Params) {
 
     const cropData = crop[0];
 
-    // Fetch growth procedure
-    const procedure = await fetchFromSupabase(
-      `/belarro_v4_growth_procedure?crop_id=eq.${id}&select=*`
-    );
-
-    // Fetch variants
-    const variants = await fetchFromSupabase(
-      `/belarro_v4_product_variant?crop_id=eq.${id}&deleted_at=is.null&select=*&order=size_grams.asc`
-    );
+    const [procedure, variants, mixComponents] = await Promise.all([
+      fetchFromSupabase(`/belarro_v4_growth_procedure?crop_id=eq.${id}&select=*`),
+      fetchFromSupabase(`/belarro_v4_product_variant?crop_id=eq.${id}&deleted_at=is.null&select=*&order=size_grams.asc`),
+      fetchFromSupabase(`/belarro_v4_crop_mix_component?mix_crop_id=eq.${id}&select=*`),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -41,6 +37,7 @@ export async function GET(request: NextRequest, props: Params) {
         ...cropData,
         procedure: procedure[0] || null,
         variants: variants || [],
+        mix_components: mixComponents || [],
       },
     });
   } catch (error) {
@@ -68,7 +65,7 @@ export async function PUT(request: NextRequest, props: Params) {
         { status: 400 }
       );
     }
-    const { name_en, name_de, flavor_en, flavor_de, status, photo_url, seeds_per_tray_grams, yield_per_tray_grams, procedure, variants } = body;
+    const { name_en, name_de, flavor_en, flavor_de, status, photo_url, seeds_per_tray_grams, yield_per_tray_grams, is_mix, mix_components, procedure, variants } = body;
 
     // Update crop
     const updateData: any = {};
@@ -80,6 +77,7 @@ export async function PUT(request: NextRequest, props: Params) {
     if (photo_url !== undefined) updateData.photo_url = photo_url;
     if (seeds_per_tray_grams !== undefined) updateData.seeds_per_tray_grams = seeds_per_tray_grams;
     if (yield_per_tray_grams !== undefined) updateData.yield_per_tray_grams = yield_per_tray_grams;
+    if (is_mix !== undefined) updateData.is_mix = is_mix;
     updateData.updated_at = new Date().toISOString();
 
     try {
@@ -176,18 +174,32 @@ export async function PUT(request: NextRequest, props: Params) {
       }
     }
 
+    // Save mix components (replace all)
+    if (is_mix && Array.isArray(mix_components)) {
+      await fetchFromSupabase(`/belarro_v4_crop_mix_component?mix_crop_id=eq.${id}`, {
+        method: 'DELETE',
+      });
+      for (const comp of mix_components) {
+        if (!comp.component_crop_id || !comp.percentage) continue;
+        await fetchFromSupabase('/belarro_v4_crop_mix_component', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: crypto.randomUUID(),
+            mix_crop_id: id,
+            component_crop_id: comp.component_crop_id,
+            percentage: parseFloat(comp.percentage),
+          }),
+        });
+      }
+    }
+
     // Fetch updated crop
-    const fullCrop = await fetchFromSupabase(
-      `/belarro_v4_crop?id=eq.${id}&select=*`
-    );
-
-    const procedure_data = await fetchFromSupabase(
-      `/belarro_v4_growth_procedure?crop_id=eq.${id}&select=*`
-    );
-
-    const variants_data = await fetchFromSupabase(
-      `/belarro_v4_product_variant?crop_id=eq.${id}&deleted_at=is.null&select=*&order=size_grams.asc`
-    );
+    const [fullCrop, procedure_data, variants_data, mix_components_data] = await Promise.all([
+      fetchFromSupabase(`/belarro_v4_crop?id=eq.${id}&select=*`),
+      fetchFromSupabase(`/belarro_v4_growth_procedure?crop_id=eq.${id}&select=*`),
+      fetchFromSupabase(`/belarro_v4_product_variant?crop_id=eq.${id}&deleted_at=is.null&select=*&order=size_grams.asc`),
+      fetchFromSupabase(`/belarro_v4_crop_mix_component?mix_crop_id=eq.${id}&select=*`),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -195,6 +207,7 @@ export async function PUT(request: NextRequest, props: Params) {
         ...fullCrop[0],
         procedure: procedure_data[0] || null,
         variants: variants_data || [],
+        mix_components: mix_components_data || [],
       },
     });
   } catch (error) {

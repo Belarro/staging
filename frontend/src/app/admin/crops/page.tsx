@@ -39,6 +39,12 @@ interface PackagingSize {
   quantity: number;
 }
 
+interface MixComponent {
+  id?: string;
+  component_crop_id: string;
+  percentage: number;
+}
+
 interface Crop {
   id: string;
   name_en: string;
@@ -47,10 +53,12 @@ interface Crop {
   flavor_de?: string;
   status: 'active' | 'paused';
   photo_url?: string | null;
+  is_mix?: boolean;
   seeds_per_tray_grams?: number | null;
   yield_per_tray_grams?: number | null;
   procedure?: GrowthProcedure;
   variants?: ProductVariant[];
+  mix_components?: MixComponent[];
   created_at?: string;
   updated_at?: string;
   deleted_at?: string | null;
@@ -98,6 +106,8 @@ export default function AdminCropsPage() {
     light_days: undefined,
   });
 
+  const [isMix, setIsMix] = useState(false);
+  const [mixComponents, setMixComponents] = useState<MixComponent[]>([]);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [newVariant, setNewVariant] = useState({ size_name: '', size_grams: '', price_eur: '', container_size: '', container_qty: '1' });
   const [packagingSizes, setPackagingSizes] = useState<PackagingSize[]>([]);
@@ -187,6 +197,8 @@ export default function AdminCropsPage() {
           light_days: undefined,
         });
         setVariants(crop.variants || []);
+        setIsMix(crop.is_mix || false);
+        setMixComponents(crop.mix_components || []);
       }
     } catch (error) {
       console.error('Failed to load crop:', error);
@@ -232,9 +244,11 @@ export default function AdminCropsPage() {
         flavor_de: formData.flavor_de || null,
         status: formData.status,
         photo_url: formData.photo_url || null,
-        seeds_per_tray_grams: formData.seeds_per_tray_grams !== '' ? Number(formData.seeds_per_tray_grams) : null,
-        yield_per_tray_grams: formData.yield_per_tray_grams !== '' ? Number(formData.yield_per_tray_grams) : null,
-        procedure,
+        seeds_per_tray_grams: !isMix && formData.seeds_per_tray_grams !== '' ? Number(formData.seeds_per_tray_grams) : null,
+        yield_per_tray_grams: !isMix && formData.yield_per_tray_grams !== '' ? Number(formData.yield_per_tray_grams) : null,
+        is_mix: isMix,
+        mix_components: isMix ? mixComponents.filter(c => c.component_crop_id && c.percentage > 0) : [],
+        procedure: isMix ? null : procedure,
         variants: variants.filter(v => v.size_name && v.size_grams),
       };
 
@@ -312,6 +326,8 @@ export default function AdminCropsPage() {
       light_days: undefined,
     });
     setVariants([]);
+    setIsMix(false);
+    setMixComponents([]);
     setShowAddVariantForm(false);
   };
 
@@ -496,7 +512,7 @@ export default function AdminCropsPage() {
 
             {/* Tabs */}
             <div className="flex border-b border-gray-200 bg-gray-50">
-              {(['basics', 'procedure', 'sizes'] as const).map(tab => (
+              {(['basics', ...(!isMix ? ['procedure'] : []), 'sizes'] as ('basics' | 'procedure' | 'sizes')[]).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -567,35 +583,120 @@ export default function AdminCropsPage() {
                     />
                   </div>
 
-                  {/* Tray yield info */}
-                  <div className="grid grid-cols-2 gap-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Seeds per Tray (g)</label>
-                      <input
-                        type="number"
-                        value={formData.seeds_per_tray_grams}
-                        onChange={(e) => setFormData({ ...formData, seeds_per_tray_grams: e.target.value })}
-                        disabled={!isEditing}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="e.g. 15"
-                        min="0"
-                        step="0.1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Yield per Tray (g)</label>
-                      <input
-                        type="number"
-                        value={formData.yield_per_tray_grams}
-                        onChange={(e) => setFormData({ ...formData, yield_per_tray_grams: e.target.value })}
-                        disabled={!isEditing}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="e.g. 120"
-                        min="0"
-                        step="0.1"
-                      />
-                    </div>
+                  {/* Mix toggle */}
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <button
+                      type="button"
+                      disabled={!isEditing}
+                      onClick={() => { setIsMix(!isMix); setMixComponents([]); }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${isMix ? 'bg-green-600' : 'bg-gray-300'} ${!isEditing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${isMix ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                    <span className="text-sm font-medium text-gray-900">This is a mix crop</span>
+                    {isMix && <span className="text-xs text-gray-500">(blend of multiple varieties)</span>}
                   </div>
+
+                  {/* Tray yield info — only for non-mix crops */}
+                  {!isMix && (
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">Seeds per Tray (g)</label>
+                        <input
+                          type="number"
+                          value={formData.seeds_per_tray_grams}
+                          onChange={(e) => setFormData({ ...formData, seeds_per_tray_grams: e.target.value })}
+                          disabled={!isEditing}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          placeholder="e.g. 15"
+                          min="0"
+                          step="0.1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">Yield per Tray (g)</label>
+                        <input
+                          type="number"
+                          value={formData.yield_per_tray_grams}
+                          onChange={(e) => setFormData({ ...formData, yield_per_tray_grams: e.target.value })}
+                          disabled={!isEditing}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          placeholder="e.g. 120"
+                          min="0"
+                          step="0.1"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mix components */}
+                  {isMix && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold text-gray-900">Mix Components</label>
+                        {isEditing && (
+                          <button
+                            type="button"
+                            onClick={() => setMixComponents([...mixComponents, { component_crop_id: '', percentage: 0 }])}
+                            className="text-xs font-semibold text-blue-700 hover:text-blue-900"
+                          >
+                            + Add variety
+                          </button>
+                        )}
+                      </div>
+                      {mixComponents.length === 0 && (
+                        <p className="text-xs text-gray-500">No varieties added yet. Click "+ Add variety" to start.</p>
+                      )}
+                      {mixComponents.map((comp, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <select
+                            value={comp.component_crop_id}
+                            onChange={e => {
+                              const updated = [...mixComponents];
+                              updated[idx] = { ...updated[idx], component_crop_id: e.target.value };
+                              setMixComponents(updated);
+                            }}
+                            disabled={!isEditing}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Select variety...</option>
+                            {crops.filter(c => !c.deleted_at && !c.is_mix && c.id !== selectedCropId).map(c => (
+                              <option key={c.id} value={c.id}>{c.name_en}</option>
+                            ))}
+                          </select>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              value={comp.percentage || ''}
+                              onChange={e => {
+                                const updated = [...mixComponents];
+                                updated[idx] = { ...updated[idx], percentage: parseFloat(e.target.value) || 0 };
+                                setMixComponents(updated);
+                              }}
+                              disabled={!isEditing}
+                              className="w-16 px-2 py-2 border border-gray-300 rounded-lg text-sm text-center disabled:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="33"
+                              min="1"
+                              max="100"
+                            />
+                            <span className="text-sm text-gray-500">%</span>
+                          </div>
+                          {isEditing && (
+                            <button
+                              type="button"
+                              onClick={() => setMixComponents(mixComponents.filter((_, i) => i !== idx))}
+                              className="text-gray-400 hover:text-red-500 text-lg font-bold"
+                            >×</button>
+                          )}
+                        </div>
+                      ))}
+                      {mixComponents.length > 0 && (
+                        <div className={`text-xs font-semibold ${Math.round(mixComponents.reduce((s, c) => s + (c.percentage || 0), 0)) === 100 ? 'text-green-700' : 'text-amber-600'}`}>
+                          Total: {mixComponents.reduce((s, c) => s + (c.percentage || 0), 0).toFixed(0)}% {Math.round(mixComponents.reduce((s, c) => s + (c.percentage || 0), 0)) !== 100 && '— must equal 100%'}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Status</label>
