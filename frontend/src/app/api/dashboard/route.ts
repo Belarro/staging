@@ -77,9 +77,12 @@ export async function GET(request: NextRequest) {
       const harvestedBatchIds = new Set(hvs.map((h: any) => h.seeding_batch_id));
       activeSeedingBatches = bts.filter((b: any) => !harvestedBatchIds.has(b.id)).length;
 
-      // Fetch followups
-      const followups = await fetchFromSupabase('/belarro_v4_follow_up?select=id,status');
-      pendingFollowUps = (followups || []).filter((f: any) => f.status === 'pending').length;
+      // Fetch followups — only count due today or overdue
+      const followups = await fetchFromSupabase('/belarro_v4_follow_up?select=id,status,due_date,location_id&location_id=not.is.null');
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      pendingFollowUps = (followups || []).filter((f: any) =>
+        f.status === 'pending' && new Date(f.due_date) <= todayEnd
+      ).length;
       const totalFollowUps = (followups || []).length;
       const completedFollowUps = (followups || []).filter((f: any) => f.status === 'completed' || f.status === 'sent').length;
       followUpConversionRate = totalFollowUps > 0
