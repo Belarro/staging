@@ -312,7 +312,7 @@ export default function OrdersPage() {
                 <select required value={addCustomerId} onChange={e => setAddCustomerId(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none">
                   <option value="">Select Customer...</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.restaurant_name || c.name}</option>)}
                 </select>
               </div>
               <div className="space-y-3">

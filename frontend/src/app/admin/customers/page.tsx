@@ -7,6 +7,8 @@ interface Customer {
   name: string;
   restaurant_name?: string;
   contact_person?: string;
+  contact_title?: string;
+  tax_number?: string;
   email?: string;
   phone?: string;
   whatsapp?: string;
@@ -47,7 +49,8 @@ export default function CustomersPage() {
     name: '',
     restaurant_name: '',
     contact_person: '',
-    contact_title: 'owner' as 'owner' | 'executive_chef' | 'chef' | 'manager',
+    contact_title: 'owner' as 'owner' | 'executive_chef' | 'chef' | 'sous_chef' | 'manager',
+    tax_number: '',
     email: '',
     phone: '',
     whatsapp: '',
@@ -149,6 +152,7 @@ export default function CustomersPage() {
       restaurant_name: '',
       contact_person: '',
       contact_title: 'owner',
+      tax_number: '',
       email: '',
       phone: '',
       whatsapp: '',
@@ -166,7 +170,8 @@ export default function CustomersPage() {
       name: c.name,
       restaurant_name: c.restaurant_name || '',
       contact_person: c.contact_person || '',
-      contact_title: 'owner',
+      contact_title: (c.contact_title as any) || 'owner',
+      tax_number: c.tax_number || '',
       email: c.email || '',
       phone: c.phone || '',
       whatsapp: c.whatsapp || '',
@@ -444,6 +449,7 @@ export default function CustomersPage() {
                     <option value="owner">Owner</option>
                     <option value="executive_chef">Executive Chef</option>
                     <option value="chef">Chef</option>
+                    <option value="sous_chef">Sous Chef</option>
                     <option value="manager">Manager</option>
                   </select>
                 </div>
@@ -516,6 +522,17 @@ export default function CustomersPage() {
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Tax Number (Steuernummer)</label>
+                <input
+                  type="text"
+                  value={formData.tax_number}
+                  onChange={e => setFormData({ ...formData, tax_number: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                  placeholder="e.g., 30/123/12345"
+                />
               </div>
 
               <div>

@@ -55,12 +55,9 @@ export async function PUT(request: NextRequest, props: Params) {
     if (!auth.ok) return auth.response;
     const { id } = await props.params;
     const body = await request.json();
-    const { contact_title, ...allowedFields } = body;
-    void contact_title;
-
     const customer = await fetchFromSupabase(`/belarro_v4_customer?id=eq.${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(allowedFields),
+      body: JSON.stringify(body),
     });
 
     return NextResponse.json({
