@@ -50,7 +50,7 @@ export async function PUT(request: NextRequest, props: Params) {
       })
     });
 
-    // Recalculate next stage due date from actual sent time
+    // Recalculate next stage due date from actual sent time (not for replied — that's manual)
     if (status === 'completed' || status === 'sent') {
       // Get this follow-up to find location_id and stage
       const current = await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${id}&select=*`);

@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
     if (!auth.ok) return auth.response;
 
     const followups = await fetchFromSupabase(
-      '/belarro_v4_follow_up?location_id=not.is.null&select=*&order=due_date.asc'
+      '/belarro_v4_follow_up?location_id=not.is.null&select=*&status=neq.skipped&order=due_date.asc'
     );
     const fls = followups || [];
     if (fls.length === 0) return NextResponse.json({ success: true, data: [] });
@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
       const loc = locMap.get(f.location_id);
       if (!loc) continue;
       if (loc.pipeline_stage === 'active' || loc.pipeline_stage === 'snoozed') continue;
-      if (f.status !== 'pending') continue;
+      if (f.status !== 'pending' && f.status !== 'replied') continue;
       const stage = f.stage || f.follow_up_number || 1;
       const existing = nextPerLocation.get(f.location_id);
       if (!existing || stage < (existing.stage || existing.follow_up_number || 1)) {
@@ -191,19 +191,12 @@ export async function GET(request: NextRequest) {
       };
     }).sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
 
-    // Completed follow-ups for Done tab — one per location (most recent)
-    const latestCompletedPerLocation = new Map<string, any>();
-    for (const f of fls) {
-      if (f.status !== 'completed' && f.status !== 'sent') continue;
-      if (!locMap.has(f.location_id)) continue;
-      const stage = f.stage || f.follow_up_number || 1;
-      const existing = latestCompletedPerLocation.get(f.location_id);
-      if (!existing || stage > (existing.stage || existing.follow_up_number || 1)) {
-        latestCompletedPerLocation.set(f.location_id, { ...f, stage });
-      }
-    }
+    // All completed stages for History tab
+    const completedRows = fls.filter((f: any) =>
+      (f.status === 'completed' || f.status === 'sent') && locMap.has(f.location_id)
+    );
 
-    const completed = Array.from(latestCompletedPerLocation.values()).map((f: any) => {
+    const completed = completedRows.map((f: any) => {
       const loc = locMap.get(f.location_id) || {};
       const lang = (loc.language || '').toLowerCase().trim();
       const flow: 'new' | 'reengage' = isOldLead(loc.timestamp, loc.created_at) ? 'reengage' : 'new';

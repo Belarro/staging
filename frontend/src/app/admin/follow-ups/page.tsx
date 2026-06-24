@@ -10,7 +10,7 @@ interface FollowUp {
   flow: 'new' | 'reengage';
   total_stages: number;
   due_date: string;
-  status: 'pending' | 'sent' | 'completed';
+  status: 'pending' | 'sent' | 'completed' | 'replied';
   sent_via: string | null;
   sent_date: string | null;
   notes: string | null;
@@ -93,7 +93,7 @@ export default function FollowUpsPage() {
   const [visitsLoading, setVisitsLoading] = useState(false);
   const [visitsError, setVisitsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'today' | 'pending' | 'done' | 'visits'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'pending' | 'done' | 'warm' | 'visits'>('today');
 
   const [selected, setSelected] = useState<FollowUp | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -110,6 +110,7 @@ export default function FollowUpsPage() {
   const [snoozeDays, setSnoozeDays] = useState(90);
   const [snoozing, setSnoozing] = useState(false);
   const [snoozeSuccess, setSnoozeSuccess] = useState<string | null>(null);
+  const [replying, setReplying] = useState<string | null>(null); // followup id being marked as replied
 
   const fetchFollowups = async () => {
     try {
@@ -180,12 +181,16 @@ export default function FollowUpsPage() {
   const upcoming = pending
     .filter(f => new Date(f.due_date) > todayEnd)
     .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-  // Done: most recently completed on top
+  // Warm: replied leads — they responded, waiting for manual follow-up
+  const warm = followups
+    .filter(f => f.status === 'replied')
+    .sort((a, b) => new Date(b.sent_date ?? b.due_date).getTime() - new Date(a.sent_date ?? a.due_date).getTime());
+  // History: ALL completed stages, all locations, newest first
   const done = followups
     .filter(f => f.status === 'completed' || f.status === 'sent')
     .sort((a, b) => new Date(b.sent_date ?? b.due_date).getTime() - new Date(a.sent_date ?? a.due_date).getTime());
 
-  const displayed = activeTab === 'today' ? today : activeTab === 'pending' ? upcoming : done;
+  const displayed = activeTab === 'today' ? today : activeTab === 'pending' ? upcoming : activeTab === 'warm' ? warm : done;
   const isLocked = activeTab === 'pending'; // Upcoming tab — no sending allowed
 
   const handleLog = async (e: React.FormEvent) => {
@@ -278,6 +283,17 @@ export default function FollowUpsPage() {
     fetchFollowups();
   };
 
+  const markReplied = async (followup: FollowUp) => {
+    setReplying(followup.id);
+    await fetch(`/api/follow-ups/${followup.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'replied', sent_via: null, notes: 'They replied — manual follow-up needed' }),
+    });
+    setReplying(null);
+    fetchFollowups();
+  };
+
   const openWhatsApp = (followup: FollowUp) => {
     const number = (followup.whatsapp_number || '').replace(/\D/g, '');
     const text = encodeURIComponent(followup.message_text);
@@ -299,7 +315,7 @@ export default function FollowUpsPage() {
     const anySent = waSent || emailSent;
 
     return (
-      <div className={`bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4 hover:shadow-md transition ${isOverdue ? 'border-red-300' : 'border-gray-200'}`}>
+      <div id={`card-${f.id}`} className={`bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4 hover:shadow-md transition ${isOverdue ? 'border-red-300' : 'border-gray-200'}`}>
         {/* Header */}
         <div className="flex justify-between items-start gap-2">
           <div>
@@ -413,10 +429,11 @@ export default function FollowUpsPage() {
 
             <div className="flex gap-2">
               <button
-                onClick={() => { setSelected(f); setShowModal(true); }}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-1.5 rounded-lg text-xs transition"
+                onClick={() => markReplied(f)}
+                disabled={replying === f.id}
+                className="flex-1 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 font-semibold py-1.5 rounded-lg text-xs transition border border-yellow-300"
               >
-                Log Contact
+                {replying === f.id ? '...' : '💬 They Replied'}
               </button>
               <button
                 onClick={() => setSnoozeId(f.location_id)}
@@ -428,13 +445,40 @@ export default function FollowUpsPage() {
                 onClick={() => setConvertId(f.location_id)}
                 className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-1.5 rounded-lg text-xs transition border border-blue-200"
               >
-                Convert to Active
+                Convert
+              </button>
+            </div>
+            <button
+              onClick={() => { setSelected(f); setShowModal(true); }}
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-1.5 rounded-lg text-xs transition"
+            >
+              Log Contact
+            </button>
+          </div>
+        )}
+
+        {f.status === 'replied' && (
+          <div className="flex flex-col gap-2">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-xs text-yellow-800 font-semibold flex items-center gap-2">
+              💬 They replied — follow up manually
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => autoLog(f, 'manual')}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-1.5 rounded-lg text-xs transition"
+              >
+                ✓ Handled — next stage
+              </button>
+              <button
+                onClick={() => setConvertId(f.location_id)}
+                className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-1.5 rounded-lg text-xs transition border border-blue-200"
+              >
+                Convert
               </button>
             </div>
           </div>
         )}
-
-        {f.status !== 'pending' && (
+        {(f.status === 'completed' || f.status === 'sent') && (
           <div className="text-[11px] text-gray-400 font-semibold uppercase flex justify-between border-t pt-2">
             <span>Via: {f.sent_via || '—'}</span>
             <span>{f.sent_date ? new Date(f.sent_date).toLocaleDateString() : '—'}</span>
@@ -466,7 +510,8 @@ export default function FollowUpsPage() {
         {[
           { key: 'today', label: `Today (${today.length})`, urgent: today.length > 0 },
           { key: 'pending', label: `Upcoming (${upcoming.length})` },
-          { key: 'done', label: `Done (${done.length})` },
+          { key: 'warm', label: `Warm (${warm.length})`, urgent: warm.length > 0 },
+          { key: 'done', label: `History (${done.length})` },
           { key: 'visits', label: 'Visits' },
         ].map(t => (
           <button
@@ -513,7 +558,19 @@ export default function FollowUpsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {visits.map(v => (
-                  <tr key={v.location_id} className="hover:bg-gray-50 transition">
+                  <tr
+                    key={v.location_id}
+                    className="hover:bg-gray-50 transition cursor-pointer"
+                    onClick={() => {
+                      const match = followups.find(f => f.location_id === v.location_id && f.status === 'pending');
+                      if (match) {
+                        setActiveTab('today');
+                        setTimeout(() => {
+                          document.getElementById(`card-${match.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
+                      }
+                    }}
+                  >
                     <td className="px-4 py-3">
                       <div className="font-semibold text-gray-900">{v.restaurant_name}</div>
                       {v.phone && <div className="text-xs text-gray-400 mt-0.5">{v.phone}</div>}
