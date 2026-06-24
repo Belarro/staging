@@ -78,13 +78,22 @@ export default function FollowUpsPage() {
     }
   };
 
-  const filtered = followups.filter(f => {
-    if (activeTab === 'pending') {
-      return f.status === 'pending';
-    } else {
+  const filtered = followups
+    .filter(f => {
+      if (activeTab === 'pending') return f.status === 'pending';
       return f.status === 'completed' || f.status === 'sent';
-    }
-  });
+    })
+    .sort((a, b) => {
+      if (activeTab === 'pending') {
+        // Overdue first, then soonest due date
+        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+      } else {
+        // Most recently completed on top
+        const aDate = a.sent_date ? new Date(a.sent_date).getTime() : 0;
+        const bDate = b.sent_date ? new Date(b.sent_date).getTime() : 0;
+        return bDate - aDate;
+      }
+    });
 
   return (
     <div className="space-y-6">
