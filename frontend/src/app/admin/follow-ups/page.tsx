@@ -25,6 +25,7 @@ interface FollowUp {
     email: string | null;
     interest_level: string | null;
     pipeline_stage: string | null;
+    language: string | null;
     sales_rep: string | null;
   };
 }
