@@ -123,6 +123,21 @@ export default function FollowUpsPage() {
     }
   };
 
+  const [fixing, setFixing] = useState(false);
+  const fixDueDates = async () => {
+    setFixing(true);
+    try {
+      const res = await fetch('/api/follow-ups/fix-stage1', { method: 'POST' });
+      const json = await res.json();
+      if (json.fixed > 0) await fetchFollowups();
+      alert(json.fixed > 0 ? `Moved ${json.fixed} follow-up(s) to Today.` : 'Nothing to fix — all up to date.');
+    } catch {
+      alert('Fix failed. Try again.');
+    } finally {
+      setFixing(false);
+    }
+  };
+
   const fetchVisits = async () => {
     try {
       setVisitsLoading(true);
@@ -431,9 +446,18 @@ export default function FollowUpsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Follow-ups</h1>
-        <p className="text-sm text-gray-500 mt-1">Your daily sales calls — leads only</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Follow-ups</h1>
+          <p className="text-sm text-gray-500 mt-1">Your daily sales calls — leads only</p>
+        </div>
+        <button
+          onClick={fixDueDates}
+          disabled={fixing}
+          className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {fixing ? 'Fixing...' : 'Fix Due Dates'}
+        </button>
       </div>
 
       {/* Tabs */}
