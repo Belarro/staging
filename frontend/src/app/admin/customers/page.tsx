@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 
 interface Customer {
   id: string;
+  _source?: 'belarro' | 'saletracker';
   name: string;
   restaurant_name?: string;
   contact_person?: string;
@@ -16,6 +17,9 @@ interface Customer {
   city?: string;
   status: 'prospect' | 'active' | 'paused' | 'inactive';
   net_days: number;
+  interest_level?: string | null;
+  visit_notes?: string | null;
+  visited_at?: string | null;
   first_contact_date: string;
   created_at: string;
 }
@@ -331,58 +335,75 @@ export default function CustomersPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCustomers.map(c => (
-            <div key={c.id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+            <div key={c.id} className={`bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between ${c._source === 'saletracker' ? 'border-blue-100' : 'border-gray-200'}`}>
               <div>
-                <h3 className="text-lg font-bold text-gray-900">{c.restaurant_name || c.name}</h3>
-                {c.restaurant_name && (
-                  <p className="text-xs text-gray-500 font-medium">{c.name}</p>
-                )}
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-lg font-bold text-gray-900">{c.name}</h3>
+                  {c._source === 'saletracker' && (
+                    <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">Visited</span>
+                  )}
+                </div>
                 {c.contact_person && (
-                  <div className="mt-3 flex items-center gap-1.5 text-xs text-gray-600">
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-600">
                     <span>👤</span>
-                    <span>Chef: {c.contact_person}</span>
+                    <span>{c.contact_title ? c.contact_title.replace('_', ' ') + ': ' : ''}{c.contact_person}</span>
                   </div>
                 )}
-                
-                {/* Contact List */}
-                <div className="mt-4 pt-3 border-t border-gray-100 space-y-1.5 text-xs text-gray-500">
+
+                {/* Contact info */}
+                <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5 text-xs text-gray-500">
                   {c.email && <div className="truncate">📧 {c.email}</div>}
                   {c.phone && <div>📞 {c.phone}</div>}
                   {c.whatsapp && <div>💬 WhatsApp: {c.whatsapp}</div>}
-                  {c.city && <div>📍 {c.address}, {c.city}</div>}
+                  {c.city && <div>📍 {c.address ? c.address + ', ' : ''}{c.city}</div>}
+                  {c.visited_at && (
+                    <div>📅 Visited: {new Date(c.visited_at).toLocaleDateString('en-DE', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                  )}
+                  {c.interest_level && (
+                    <div>⭐ Interest: <span className={`font-semibold capitalize ${c.interest_level === 'high' ? 'text-green-600' : c.interest_level === 'medium' ? 'text-amber-600' : 'text-gray-500'}`}>{c.interest_level}</span></div>
+                  )}
+                  {c.visit_notes && (
+                    <div className="italic text-gray-400 line-clamp-2">"{c.visit_notes}"</div>
+                  )}
                 </div>
               </div>
 
-              <div className="mt-6 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <span>Terms: <strong>{c.net_days} Net Days</strong></span>
-                <span className="text-[10px] text-gray-400">Created: {new Date(c.created_at).toLocaleDateString()}</span>
+              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                {c._source === 'belarro' ? (
+                  <span>Terms: <strong>{c.net_days} Net Days</strong></span>
+                ) : (
+                  <span className="text-gray-400">SalesTracker lead</span>
+                )}
+                <span className="text-[10px] text-gray-400">{new Date(c.created_at).toLocaleDateString()}</span>
               </div>
 
-              {/* Action buttons */}
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => openEditModal(c)}
-                  className="bg-gray-50 hover:bg-gray-100 text-gray-700 py-1.5 rounded-lg border border-gray-200 font-semibold text-xs"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleStatusToggle(c)}
-                  className={`py-1.5 rounded-lg border font-semibold text-xs ${
-                    c.status === 'active' 
-                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200' 
-                      : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-200'
-                  }`}
-                >
-                  {c.status === 'active' ? 'Pause' : 'Activate'}
-                </button>
-                <button
-                  onClick={() => handleDelete(c.id)}
-                  className="bg-red-50 hover:bg-red-100 text-red-700 py-1.5 rounded-lg border border-red-200 font-semibold text-xs"
-                >
-                  Delete
-                </button>
-              </div>
+              {/* Action buttons — only for Belarro customers */}
+              {c._source === 'belarro' && (
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => openEditModal(c)}
+                    className="bg-gray-50 hover:bg-gray-100 text-gray-700 py-1.5 rounded-lg border border-gray-200 font-semibold text-xs"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleStatusToggle(c)}
+                    className={`py-1.5 rounded-lg border font-semibold text-xs ${
+                      c.status === 'active'
+                        ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                        : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-200'
+                    }`}
+                  >
+                    {c.status === 'active' ? 'Pause' : 'Activate'}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(c.id)}
+                    className="bg-red-50 hover:bg-red-100 text-red-700 py-1.5 rounded-lg border border-red-200 font-semibold text-xs"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
