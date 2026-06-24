@@ -68,6 +68,15 @@ const INTEREST_COLORS: Record<string, string> = {
   low: 'bg-gray-100 text-gray-500',
 };
 
+// Parse "DD-MM-YYYY HH:MM" or ISO → Date
+function parseVisitDate(ts: string | null): Date | null {
+  if (!ts) return null;
+  const m = ts.match(/^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
+  if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4] ?? '00'}:${m[5] ?? '00'}:00`);
+  const d = new Date(ts);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 const STAGE_LABELS: Record<string, string> = {
   new: 'New Lead',
   active: 'Active Customer',
@@ -117,7 +126,7 @@ export default function FollowUpsPage() {
       const json = await res.json();
       if (json.success) {
         const sorted = (json.data || []).sort((a: Visit, b: Visit) =>
-          new Date(b.visited_at ?? 0).getTime() - new Date(a.visited_at ?? 0).getTime()
+          (parseVisitDate(b.visited_at)?.getTime() ?? 0) - (parseVisitDate(a.visited_at)?.getTime() ?? 0)
         );
         setVisits(sorted);
       } else {
@@ -428,9 +437,9 @@ export default function FollowUpsPage() {
                       {v.email && <div className="text-xs text-gray-400 mt-0.5">{v.email}</div>}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-gray-600">
-                      {v.visited_at
-                        ? new Date(v.visited_at).toLocaleDateString('en-DE', { day: 'numeric', month: 'short', year: 'numeric' })
-                        : '—'}
+                      {parseVisitDate(v.visited_at)
+                        ? parseVisitDate(v.visited_at)!.toLocaleDateString('en-DE', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : v.visited_at || '—'}
                     </td>
                     <td className="px-4 py-3">
                       {v.interest_level ? (
