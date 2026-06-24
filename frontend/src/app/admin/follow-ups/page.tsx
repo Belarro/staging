@@ -531,9 +531,10 @@ export default function FollowUpsPage() {
                 {selected.location.email && (
                   <button
                     onClick={() => {
+                      const to = encodeURIComponent(selected.location.email!);
                       const subject = encodeURIComponent('Belarro Microgreens');
                       const body = encodeURIComponent(selected.message_text);
-                      window.open(`mailto:${selected.location.email}?subject=${subject}&body=${body}`, '_blank');
+                      window.open(`https://mail.google.com/mail/?view=cm&from=hello%40belarro.com&to=${to}&su=${subject}&body=${body}`, '_blank');
                     }}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-sm transition"
                   >
