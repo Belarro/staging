@@ -116,7 +116,10 @@ export default function FollowUpsPage() {
       const res = await fetch('/api/visits');
       const json = await res.json();
       if (json.success) {
-        setVisits(json.data || []);
+        const sorted = (json.data || []).sort((a: Visit, b: Visit) =>
+          new Date(b.visited_at ?? 0).getTime() - new Date(a.visited_at ?? 0).getTime()
+        );
+        setVisits(sorted);
       } else {
         setVisitsError(json.error || 'Failed to load visits');
       }
@@ -139,9 +142,18 @@ export default function FollowUpsPage() {
   todayEnd.setHours(23, 59, 59, 999);
 
   const pending = followups.filter(f => f.status === 'pending');
-  const today = pending.filter(f => new Date(f.due_date) <= todayEnd);
-  const upcoming = pending.filter(f => new Date(f.due_date) > todayEnd);
-  const done = followups.filter(f => f.status === 'completed' || f.status === 'sent');
+  // Today: soonest due date first (overdue at top)
+  const today = pending
+    .filter(f => new Date(f.due_date) <= todayEnd)
+    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+  // Upcoming: soonest due date first
+  const upcoming = pending
+    .filter(f => new Date(f.due_date) > todayEnd)
+    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+  // Done: most recently completed on top
+  const done = followups
+    .filter(f => f.status === 'completed' || f.status === 'sent')
+    .sort((a, b) => new Date(b.sent_date ?? b.due_date).getTime() - new Date(a.sent_date ?? a.due_date).getTime());
 
   const displayed = activeTab === 'today' ? today : activeTab === 'pending' ? upcoming : done;
 
