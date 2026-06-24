@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     // Fetch Belarro customers + SalesTracker locations in parallel
     const [customers, locations] = await Promise.all([
       fetchFromSupabase('/belarro_v4_customer?deleted_at=is.null&select=*&order=created_at.desc').catch(() => []),
-      fetchFromSupabase('/locations?archived=neq.YES&select=id,location_name,contact_person,direct_phone,business_phone,direct_email,business_email,pipeline_stage,interest_level,visit_notes,timestamp,created_at&order=timestamp.desc.nullslast&limit=500').catch(() => []),
+      fetchFromSupabase('/locations?archived=neq.YES&select=id,location_name,contact_person,direct_phone,business_phone,direct_email,business_email,pipeline_stage,interest_level,visit_notes,sales_rep,timestamp,created_at&order=timestamp.desc.nullslast&limit=500').catch(() => []),
     ]);
 
     // Normalize belarro_v4_customer rows
@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
         tax_number: null,
         interest_level: loc.interest_level || null,
         visit_notes: loc.visit_notes || null,
+        sales_rep: loc.sales_rep || null,
         visited_at: loc.timestamp || null,
         first_contact_date: loc.timestamp || loc.created_at,
         created_at: loc.created_at,

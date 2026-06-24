@@ -19,6 +19,7 @@ interface Customer {
   net_days: number;
   interest_level?: string | null;
   visit_notes?: string | null;
+  sales_rep?: string | null;
   visited_at?: string | null;
   first_contact_date: string;
   created_at: string;
@@ -357,7 +358,7 @@ export default function CustomersPage() {
                   {c.whatsapp && <div>💬 WhatsApp: {c.whatsapp}</div>}
                   {c.city && <div>📍 {c.address ? c.address + ', ' : ''}{c.city}</div>}
                   {c.visited_at && (
-                    <div>📅 Visited: {new Date(c.visited_at).toLocaleDateString('en-DE', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                    <div>📅 Visited: {new Date(c.visited_at).toLocaleDateString('en-DE', { day: 'numeric', month: 'short', year: 'numeric' })}{c.sales_rep ? ` — ${c.sales_rep}` : ''}</div>
                   )}
                   {c.interest_level && (
                     <div>⭐ Interest: <span className={`font-semibold capitalize ${c.interest_level === 'high' ? 'text-green-600' : c.interest_level === 'medium' ? 'text-amber-600' : 'text-gray-500'}`}>{c.interest_level}</span></div>
