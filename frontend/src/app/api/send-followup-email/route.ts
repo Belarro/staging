@@ -48,7 +48,7 @@ function buildMimeEmail({
   const lines = [
     `From: Belarro Microgreens <hello@belarro.com>`,
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
     ``,
@@ -120,43 +120,8 @@ export async function POST(request: NextRequest) {
       throw new Error(`Gmail send failed: ${sendRes.status}`);
     }
 
-    // Auto-log the follow-up as sent
-    if (followup_id) {
-      await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${followup_id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          status: 'sent',
-          sent_via: 'email',
-          sent_date: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }),
-      });
-
-      // Advance next stage due date
-      const current = await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${followup_id}&select=*`);
-      if (current && current.length > 0) {
-        const cur = current[0];
-        const nextStage = (cur.stage || 1) + 1;
-        const next = await fetchFromSupabase(
-          `/belarro_v4_follow_up?location_id=eq.${cur.location_id}&stage=eq.${nextStage}&status=eq.pending&select=id,follow_up_days`
-        );
-        if (next && next.length > 0) {
-          const n = next[0];
-          const daysToAdd = n.follow_up_days ?? 2;
-          const due = new Date();
-          let added = 0;
-          while (added < daysToAdd) {
-            due.setDate(due.getDate() + 1);
-            const dow = due.getDay();
-            if (dow !== 0 && dow !== 6) added++;
-          }
-          await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${n.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ due_date: due.toISOString(), updated_at: new Date().toISOString() }),
-          });
-        }
-      }
-    }
+    // Do NOT auto-log — user may still want to send WhatsApp too.
+    // They click "Done — move to next stage" manually after sending all channels.
 
     return NextResponse.json({ success: true });
   } catch (error) {

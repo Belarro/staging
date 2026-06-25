@@ -306,28 +306,47 @@ export default function FollowUpsPage() {
     setConfirmSent({ followup, via: 'whatsapp' });
   };
 
+  const EMAIL_SUBJECTS: Record<string, Record<number, string>> = {
+    DE: {
+      1: 'Belarro Microgreens - Nach unserem Gespraech heute',
+      2: 'Belarro Microgreens - Kurze Nachfrage',
+      3: 'Belarro Microgreens - Noch interessiert?',
+      4: 'Belarro Microgreens - Letzte Nachricht von uns',
+      5: 'Belarro Microgreens - Wir melden uns ein letztes Mal',
+    },
+    EN: {
+      1: 'Belarro Microgreens - Following our conversation today',
+      2: 'Belarro Microgreens - Quick follow-up',
+      3: 'Belarro Microgreens - Still interested?',
+      4: 'Belarro Microgreens - One last message',
+      5: 'Belarro Microgreens - Final note from us',
+    },
+  };
+
   const sendEmail = async (followup: FollowUp) => {
     if (!followup.location.email) return;
     setSendingEmail(followup.id);
     setEmailError(null);
     try {
       const isDE = (followup.location.language || '').toUpperCase() === 'DE';
+      const lang = isDE ? 'DE' : 'EN';
+      const subject = EMAIL_SUBJECTS[lang][followup.stage] || (isDE ? 'Belarro Microgreens - Nachricht' : 'Belarro Microgreens - Message');
       const res = await fetch('/api/send-followup-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           followup_id: followup.id,
           to: followup.location.email,
-          subject: isDE ? 'Belarro Microgreens — Nachricht für Sie' : 'Belarro Microgreens — A message for you',
+          subject,
           body: followup.message_text,
           language: followup.location.language || 'EN',
         }),
       });
       const json = await res.json();
       if (json.success) {
-        setShowMessage(false);
-        setSelected(null);
-        fetchFollowups();
+        // Mark email as sent in UI — user can still send WhatsApp before logging done
+        markChannelSent(followup, 'email');
+        setEmailError(null);
       } else {
         setEmailError(json.error || 'Send failed');
       }
