@@ -444,6 +444,27 @@ export default function FollowUpsPage() {
                 ) : '📧 Send Email Anyway'}
               </button>
             )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => markReplied(f)}
+                disabled={replying === f.id}
+                className="flex-1 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 font-semibold py-1.5 rounded-lg text-xs transition border border-yellow-300"
+              >
+                {replying === f.id ? '...' : '💬 Communicated'}
+              </button>
+              <button
+                onClick={() => setSnoozeId(f.location_id)}
+                className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold py-1.5 rounded-lg text-xs transition border border-amber-200"
+              >
+                Snooze
+              </button>
+              <button
+                onClick={() => setConvertId(f.location_id)}
+                className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-1.5 rounded-lg text-xs transition border border-blue-200"
+              >
+                Converted
+              </button>
+            </div>
           </div>
         )}
         {f.status === 'pending' && !locked && (
