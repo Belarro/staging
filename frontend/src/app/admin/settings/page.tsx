@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function SettingsPage() {
+function SettingsContent() {
   const searchParams = useSearchParams();
   const gmailStatus = searchParams.get('gmail');
 
@@ -19,12 +19,7 @@ export default function SettingsPage() {
   }, [gmailStatus]);
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Settings</h1>
-        <p className="text-sm text-gray-500 mt-1">Integrations and configuration</p>
-      </div>
-
+    <>
       {gmailStatus === 'connected' && (
         <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-800 text-sm font-semibold">
           Gmail connected successfully. Follow-up emails will now be sent automatically with the flyer attached.
@@ -36,7 +31,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Gmail Integration */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center text-xl">📧</div>
@@ -58,10 +52,7 @@ export default function SettingsPage() {
                 <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
                 Connected — hello@belarro.com
               </div>
-              <a
-                href="/api/auth/gmail"
-                className="text-xs text-gray-500 hover:text-gray-700 underline"
-              >
+              <a href="/api/auth/gmail" className="text-xs text-gray-500 hover:text-gray-700 underline">
                 Reconnect
               </a>
             </div>
@@ -86,6 +77,20 @@ export default function SettingsPage() {
           <p><strong>You only need to connect once.</strong> The connection stays active.</p>
         </div>
       </div>
+    </>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Settings</h1>
+        <p className="text-sm text-gray-500 mt-1">Integrations and configuration</p>
+      </div>
+      <Suspense fallback={<div className="animate-pulse h-40 bg-gray-100 rounded-xl" />}>
+        <SettingsContent />
+      </Suspense>
     </div>
   );
 }
