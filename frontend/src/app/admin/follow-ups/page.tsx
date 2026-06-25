@@ -492,26 +492,26 @@ export default function FollowUpsPage() {
                 disabled={replying === f.id}
                 className="flex-1 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 font-semibold py-1.5 rounded-lg text-xs transition border border-yellow-300"
               >
-                {replying === f.id ? '...' : '💬 They Replied'}
+                {replying === f.id ? '...' : '💬 Communicated'}
               </button>
               <button
                 onClick={() => setSnoozeId(f.location_id)}
                 className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold py-1.5 rounded-lg text-xs transition border border-amber-200"
               >
-                Not Now
+                Snooze
               </button>
               <button
                 onClick={() => setConvertId(f.location_id)}
                 className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-1.5 rounded-lg text-xs transition border border-blue-200"
               >
-                Convert
+                Converted
               </button>
             </div>
             <button
               onClick={() => { setSelected(f); setShowModal(true); }}
               className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-1.5 rounded-lg text-xs transition"
             >
-              Log Contact
+              Manual Log
             </button>
           </div>
         )}
@@ -519,20 +519,26 @@ export default function FollowUpsPage() {
         {f.status === 'replied' && (
           <div className="flex flex-col gap-2">
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-xs text-yellow-800 font-semibold flex items-center gap-2">
-              💬 They replied — follow up manually
+              💬 Communicated — handle personally
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => autoLog(f, 'manual')}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-1.5 rounded-lg text-xs transition"
               >
-                ✓ Handled — next stage
+                ▶ Resume
+              </button>
+              <button
+                onClick={() => setSnoozeId(f.location_id)}
+                className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold py-1.5 rounded-lg text-xs transition border border-amber-200"
+              >
+                Snooze
               </button>
               <button
                 onClick={() => setConvertId(f.location_id)}
                 className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-1.5 rounded-lg text-xs transition border border-blue-200"
               >
-                Convert
+                Converted
               </button>
             </div>
           </div>
@@ -893,9 +899,9 @@ export default function FollowUpsPage() {
       {convertId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Convert to Active Customer?</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Mark as Converted?</h2>
             <p className="text-sm text-gray-600 mb-6">
-              This will move the lead to Active and close all their pending follow-ups. This means they're now ordering from you.
+              This marks them as an active customer and closes all pending follow-ups. Use this when they confirmed they want to order from you.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setConvertId(null)}
@@ -906,7 +912,7 @@ export default function FollowUpsPage() {
                 onClick={() => handleConvertToActive(convertId)}
                 disabled={converting}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm">
-                {converting ? 'Converting...' : 'Yes, Convert'}
+                {converting ? 'Converting...' : 'Yes, Converted'}
               </button>
             </div>
           </div>
