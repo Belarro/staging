@@ -9,10 +9,10 @@ export async function POST(request: NextRequest) {
     const { location_id } = await request.json();
     if (!location_id) return NextResponse.json({ success: false, error: 'location_id required' }, { status: 400 });
 
-    // Mark location as active in locations table
+    // Mark location as active + set interest_level to Closed Deal (drives green dot on map)
     await fetchFromSupabase(`/locations?id=eq.${location_id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ pipeline_stage: 'active', updated_at: new Date().toISOString() }),
+      body: JSON.stringify({ pipeline_stage: 'active', interest_level: 'Closed Deal', updated_at: new Date().toISOString() }),
     });
 
     // Close all pending follow-ups for this location
