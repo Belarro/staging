@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
 
-const FLYER_EN = 'https://wbqzlxdyjdmbzifhsyil.supabase.co/storage/v1/object/public/assets/flyers/followup-en.png';
-const FLYER_DE = 'https://wbqzlxdyjdmbzifhsyil.supabase.co/storage/v1/object/public/assets/flyers/followup-de.png';
+const FLYER_EN = 'https://wbqzlxdyjdmbzifhsyil.supabase.co/storage/v1/object/public/assets/flyers/flyer-en.png';
+const FLYER_DE = 'https://wbqzlxdyjdmbzifhsyil.supabase.co/storage/v1/object/public/assets/flyers/flyer-de.png';
 
 async function getValidAccessToken(): Promise<string> {
   const rows = await fetchFromSupabase('/gmail_tokens?email=eq.hello%40belarro.com&select=*');
