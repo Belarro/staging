@@ -44,6 +44,10 @@ export default function InventoryPage() {
   const [editQty, setEditQty] = useState<string>('');
   const [editMode, setEditMode] = useState<'add' | 'set'>('add');
 
+  // Full edit modal for seeds
+  const [editSeed, setEditSeed] = useState<SeedInventory | null>(null);
+  const [editSeedForm, setEditSeedForm] = useState({ crop_id: '', quantity_grams: '', seeds_per_tray: '', reorder_threshold_trays: '' });
+
   const [showAddSeed, setShowAddSeed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [seedForm, setSeedForm] = useState({
@@ -135,6 +139,29 @@ export default function InventoryPage() {
     });
     const json = await res.json();
     if (json.success) { setPkgEditId(null); setPkgEditQty(''); fetchInventory(); }
+  };
+
+  const handleSaveEditSeed = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editSeed || submitting) return;
+    setSubmitting(true);
+    try {
+      await fetch('/api/inventory/seed', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editSeed.id,
+          crop_id: editSeedForm.crop_id,
+          quantity_grams: parseFloat(editSeedForm.quantity_grams),
+          seeds_per_tray: parseFloat(editSeedForm.seeds_per_tray),
+          reorder_threshold_trays: parseInt(editSeedForm.reorder_threshold_trays) || 20,
+        }),
+      });
+      setEditSeed(null);
+      fetchInventory();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDeleteSeed = async (id: string) => {
@@ -298,7 +325,7 @@ export default function InventoryPage() {
                               className="bg-green-50 hover:bg-green-100 text-green-700 font-semibold px-3 py-1.5 rounded-lg border border-green-200 text-xs"
                             >+ Received</button>
                             <button
-                              onClick={() => { setEditId(s.id); setEditQty(s.quantity_grams.toString()); setEditMode('set'); }}
+                              onClick={() => { setEditSeed(s); setEditSeedForm({ crop_id: s.crop_id, quantity_grams: s.quantity_grams.toString(), seeds_per_tray: (s.seeds_per_tray || '').toString(), reorder_threshold_trays: s.reorder_threshold_trays.toString() }); }}
                               className="bg-gray-50 hover:bg-gray-100 text-gray-600 font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-xs"
                             >Edit</button>
                             <button
@@ -477,6 +504,62 @@ export default function InventoryPage() {
                 <button type="submit" disabled={submitting}
                   className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-lg text-sm shadow">
                   {submitting ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Seed Modal */}
+      {editSeed && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md border border-gray-200">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Edit Seed Stock</h2>
+              <button onClick={() => setEditSeed(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+            </div>
+            <form onSubmit={handleSaveEditSeed} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Crop *</label>
+                <select required value={editSeedForm.crop_id} onChange={e => setEditSeedForm({ ...editSeedForm, crop_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                  <option value="">Select Crop...</option>
+                  {crops.map(c => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Stock (grams) *</label>
+                <input type="number" min="0" required
+                  value={editSeedForm.quantity_grams}
+                  onChange={e => setEditSeedForm({ ...editSeedForm, quantity_grams: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Grams per tray *</label>
+                <input type="number" min="1" required
+                  value={editSeedForm.seeds_per_tray}
+                  onChange={e => setEditSeedForm({ ...editSeedForm, seeds_per_tray: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+                {editSeedForm.quantity_grams && editSeedForm.seeds_per_tray && (
+                  <p className="text-xs text-green-700 font-semibold mt-1">
+                    = {Math.floor(parseFloat(editSeedForm.quantity_grams) / parseFloat(editSeedForm.seeds_per_tray))} trays available
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Reorder when below (trays)</label>
+                <input type="number" min="1"
+                  value={editSeedForm.reorder_threshold_trays}
+                  onChange={e => setEditSeedForm({ ...editSeedForm, reorder_threshold_trays: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+              </div>
+              <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
+                <button type="button" onClick={() => setEditSeed(null)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm">Cancel</button>
+                <button type="submit" disabled={submitting}
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-lg text-sm shadow">
+                  {submitting ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>
