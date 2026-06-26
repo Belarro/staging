@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
         }
         const rawSeedDate = new Date(harvestTuesday);
         rawSeedDate.setDate(rawSeedDate.getDate() - growDays);
-        const useTuesday = growDays >= 10;
+        const useTuesday = growDays > 10;
         const seedDate = snapToSeedDay(rawSeedDate, useTuesday);
         return {
           crop_id: crop.id,

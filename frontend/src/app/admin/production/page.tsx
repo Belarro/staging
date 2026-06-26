@@ -159,7 +159,7 @@ export default function ProductionPage() {
                 <div className="bg-blue-50 border-b border-blue-100 px-5 py-4 flex items-center justify-between">
                   <div>
                     <div className="font-bold text-gray-900">Tuesday Seeding</div>
-                    <div className="text-xs text-gray-500">{data?.next_tuesday ? fmt(data.next_tuesday) : ''} — long cycle (10+ days)</div>
+                    <div className="text-xs text-gray-500">{data?.next_tuesday ? fmt(data.next_tuesday) : ''} — long cycle (11+ days)</div>
                   </div>
                   {tuesdayItems.length > 0 && (
                     <span className="text-2xl font-extrabold text-blue-600">
@@ -195,7 +195,7 @@ export default function ProductionPage() {
                 <div className="bg-purple-50 border-b border-purple-100 px-5 py-4 flex items-center justify-between">
                   <div>
                     <div className="font-bold text-gray-900">Friday Seeding</div>
-                    <div className="text-xs text-gray-500">{data?.next_friday ? fmt(data.next_friday) : ''} — short cycle (under 10 days)</div>
+                    <div className="text-xs text-gray-500">{data?.next_friday ? fmt(data.next_friday) : ''} — short cycle (up to 10 days)</div>
                   </div>
                   {fridayItems.length > 0 && (
                     <span className="text-2xl font-extrabold text-purple-600">
