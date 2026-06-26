@@ -94,119 +94,6 @@ export async function GET(request: NextRequest) {
     };
     const thisWeekNum = isoWeek(today);
 
-    const customerGroups = new Map<string, any[]>();
-    for (const order of (orders || [])) {
-      // Biweekly: only include on even weeks (consistent every-other-week rhythm)
-      if (order.frequency === 'biweekly' && thisWeekNum % 2 !== 0) continue;
-      const cid = order.customer_id;
-      if (!customerGroups.has(cid)) customerGroups.set(cid, []);
-      customerGroups.get(cid)!.push(order);
-    }
-
-    const schedule: {
-      harvest_date: string;
-      harvest_display: string;
-      customer_id: string;
-      customer_name: string;
-      items: {
-        crop_id: string;
-        crop_name: string;
-        grow_days: number;
-        seed_date: string;
-        seed_display: string;
-        seed_day: string;
-        order_qty: number;
-        size_name: string;
-        size_grams: number;
-        trays_needed: number | null;
-        yield_per_tray: number | null;
-      }[];
-    }[] = [];
-
-    for (const [customerId, customerOrders] of customerGroups) {
-      const customer = custMap.get(customerId);
-      const customerName = customer?.name || null;
-      if (!customerName) continue; // skip orders with no real customer name
-
-      // Resolve crop + grow days + variant per order line
-      const lines = customerOrders.map((order: any) => {
-        const variant = varMap.get(order.product_variant_id);
-        const crop = variant ? cropMap.get(variant.crop_id) : null;
-        const proc = crop ? procMap.get(crop.id) : null;
-        const growDays = proc
-          ? (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0)
-          : 0;
-        return { order, crop, variant, growDays: growDays > 0 ? growDays : null };
-      }).filter((l: any) => l.crop);
-
-      if (lines.length === 0) continue;
-
-      const knownGrowDays = lines.map((l: any) => l.growDays).filter((d: any) => d !== null) as number[];
-      const maxGrowDays = knownGrowDays.length > 0 ? Math.max(...knownGrowDays) : 7;
-
-      const earliestRaw = new Date(today);
-      earliestRaw.setDate(earliestRaw.getDate() + maxGrowDays);
-      const harvestTuesday = nextTuesdayOnOrAfter(earliestRaw);
-
-      // One row per order line — show actual order qty, size, and trays needed
-      const items = lines.map(({ order, crop, variant, growDays }: any) => {
-        const orderQty = order.quantity || 1;
-        const sizeGrams = variant?.size_grams || 0;
-        const totalGramsNeeded = orderQty * sizeGrams;
-        const yieldPerTray = crop.yield_per_tray_grams || null;
-        const traysNeeded = yieldPerTray && totalGramsNeeded > 0
-          ? Math.ceil(totalGramsNeeded / yieldPerTray)
-          : null;
-
-        if (growDays === null) {
-          return {
-            crop_id: crop.id,
-            crop_name: crop.name_en,
-            grow_days: 0,
-            seed_date: '',
-            seed_display: '⚠️ Set grow days in crop config',
-            seed_day: '—',
-            order_qty: orderQty,
-            size_name: variant?.size_name || '',
-            size_grams: sizeGrams,
-            trays_needed: traysNeeded,
-            yield_per_tray: yieldPerTray,
-          };
-        }
-        const rawSeedDate = new Date(harvestTuesday);
-        rawSeedDate.setDate(rawSeedDate.getDate() - growDays);
-        const useTuesday = growDays > 10;
-        const seedDate = snapToSeedDay(rawSeedDate, useTuesday);
-        return {
-          crop_id: crop.id,
-          crop_name: crop.name_en,
-          grow_days: growDays,
-          seed_date: ymd(seedDate),
-          seed_display: fmt(seedDate),
-          seed_day: useTuesday ? 'Tuesday' : 'Friday',
-          order_qty: orderQty,
-          size_name: variant?.size_name || '',
-          size_grams: sizeGrams,
-          trays_needed: traysNeeded,
-          yield_per_tray: yieldPerTray,
-        };
-      });
-
-      schedule.push({
-        harvest_date: ymd(harvestTuesday),
-        harvest_display: fmt(harvestTuesday),
-        customer_id: customerId,
-        customer_name: customerName,
-        items,
-      });
-    }
-
-    // Sort by harvest date, then customer name
-    schedule.sort((a, b) =>
-      new Date(a.harvest_date).getTime() - new Date(b.harvest_date).getTime() ||
-      a.customer_name.localeCompare(b.customer_name)
-    );
-
     // What to seed this Tuesday and this Friday
     const nextTuesday = nextTuesdayOnOrAfter(today);
     const nextFriday = new Date(today);
@@ -216,29 +103,96 @@ export async function GET(request: NextRequest) {
     const tuesdayKey = ymd(nextTuesday);
     const fridayKey = ymd(nextFriday);
 
-    // Flatten all items, group by seed_date (deduplicated by crop across all customers)
-    const bySeedDateMap = new Map<string, Map<string, { crop_name: string; trays: number; customers: string[]; harvest_display: string; grow_days: number }>>();
-    for (const delivery of schedule) {
-      for (const item of delivery.items) {
-        if (!item.seed_date) continue;
-        if (!bySeedDateMap.has(item.seed_date)) bySeedDateMap.set(item.seed_date, new Map());
-        const cropMap2 = bySeedDateMap.get(item.seed_date)!;
-        if (!cropMap2.has(item.crop_id)) {
-          cropMap2.set(item.crop_id, { crop_name: item.crop_name, trays: 0, customers: [], harvest_display: delivery.harvest_display, grow_days: item.grow_days });
-        }
-        const entry = cropMap2.get(item.crop_id)!;
-        entry.trays += item.trays_needed || 1;
-        if (!entry.customers.includes(delivery.customer_name)) entry.customers.push(delivery.customer_name);
+    // ── SEEDING SCHEDULE: per crop line, not per customer ──────────────
+    // Each order line independently determines its seed day based on its own grow days.
+    // Tuesday = 11+ days grow. Friday = 1-10 days grow.
+    // Biweekly orders only appear on even ISO weeks.
+
+    // seed day buckets: Map<seedDateKey, Map<cropId, {crop_name, trays, customers}>>
+    const bySeedDateMap = new Map<string, Map<string, { crop_name: string; trays: number; customers: string[] }>>();
+
+    // delivery schedule: per customer, one entry, harvest date = next Tuesday after longest grow crop
+    const customerDeliveryMap = new Map<string, { harvest_date: string; harvest_display: string; customer_name: string; items: any[] }>();
+
+    for (const order of (orders || [])) {
+      // Biweekly: only include on even ISO weeks
+      if (order.frequency === 'biweekly' && thisWeekNum % 2 !== 0) continue;
+
+      const customer = custMap.get(order.customer_id);
+      if (!customer?.name) continue;
+
+      const variant = varMap.get(order.product_variant_id);
+      const crop = variant ? cropMap.get(variant.crop_id) : null;
+      if (!crop) continue;
+
+      const proc = procMap.get(crop.id);
+      const growDays = proc
+        ? (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0)
+        : 0;
+
+      const orderQty = order.quantity || 1;
+      const sizeGrams = variant?.size_grams || 0;
+      const yieldPerTray = crop.yield_per_tray_grams || null;
+      const traysNeeded = yieldPerTray && sizeGrams > 0
+        ? Math.ceil((orderQty * sizeGrams) / yieldPerTray)
+        : orderQty;
+
+      if (growDays === 0) continue; // no procedure configured — skip
+
+      // Each crop seeds independently based on its own grow days
+      const useTuesday = growDays > 10;
+      const seedDayTarget = useTuesday ? TUESDAY : FRIDAY;
+      const seedDate = nextDayOnOrAfter(today, seedDayTarget);
+      const seedKey = ymd(seedDate);
+
+      // Add to seed day bucket
+      if (!bySeedDateMap.has(seedKey)) bySeedDateMap.set(seedKey, new Map());
+      const dayMap = bySeedDateMap.get(seedKey)!;
+      if (!dayMap.has(crop.id)) {
+        dayMap.set(crop.id, { crop_name: crop.name_en, trays: 0, customers: [] });
       }
+      const entry = dayMap.get(crop.id)!;
+      entry.trays += traysNeeded;
+      if (!entry.customers.includes(customer.name)) entry.customers.push(customer.name);
+
+      // Harvest date for delivery tab: next Tuesday after grow days from seed date
+      const harvestRaw = new Date(seedDate);
+      harvestRaw.setDate(harvestRaw.getDate() + growDays);
+      const harvestTuesday = nextTuesdayOnOrAfter(harvestRaw);
+      const harvestKey = ymd(harvestTuesday);
+
+      if (!customerDeliveryMap.has(order.customer_id)) {
+        customerDeliveryMap.set(order.customer_id, {
+          harvest_date: harvestKey,
+          harvest_display: fmt(harvestTuesday),
+          customer_name: customer.name,
+          items: [],
+        });
+      }
+      const delivery = customerDeliveryMap.get(order.customer_id)!;
+      // Use the latest harvest date across all crops for this customer
+      if (harvestKey > delivery.harvest_date) {
+        delivery.harvest_date = harvestKey;
+        delivery.harvest_display = fmt(harvestTuesday);
+      }
+      delivery.items.push({
+        crop_name: crop.name_en,
+        order_qty: orderQty,
+        size_name: variant?.size_name || '',
+        size_grams: sizeGrams,
+        trays_needed: traysNeeded,
+      });
     }
+
+    const schedule = Array.from(customerDeliveryMap.values()).sort((a, b) =>
+      a.harvest_date.localeCompare(b.harvest_date) || a.customer_name.localeCompare(b.customer_name)
+    );
 
     const flatSeedDay = (dateKey: string) =>
       Array.from((bySeedDateMap.get(dateKey) || new Map()).values()).map(e => ({
         crop_name: e.crop_name,
         quantity_trays: e.trays,
         customer_name: e.customers.join(', '),
-        harvest_display: e.harvest_display,
-        grow_days: e.grow_days,
       }));
 
     return NextResponse.json({
