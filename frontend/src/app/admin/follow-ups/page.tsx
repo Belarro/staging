@@ -663,8 +663,7 @@ export default function FollowUpsPage() {
                     onClick={() => {
                       const match = followups.find(f => f.location_id === v.location_id && (f.status === 'pending' || f.status === 'replied'));
                       if (match) {
-                        const dueDate = new Date(match.due_date);
-                        const tab = match.status === 'replied' ? 'warm' : dueDate <= todayEnd ? 'today' : 'pending';
+                        const tab = match.status === 'replied' ? 'warm' : new Date(match.due_date).toLocaleDateString('sv') <= todayStr ? 'today' : 'pending';
                         setActiveTab(tab as any);
                         setHighlightId(match.id);
                         setTimeout(() => {
