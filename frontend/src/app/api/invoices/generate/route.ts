@@ -40,14 +40,14 @@ export async function GET(request: NextRequest) {
       fetchFromSupabase('/belarro_v4_order?deleted_at=is.null&select=*'),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=id,name_en&deleted_at=is.null'),
-      fetchFromSupabase('/belarro_v4_customer?deleted_at=is.null&select=id,name,restaurant_name,email,address,tax_number,net_days'),
+      fetchFromSupabase('/belarro_v4_customer?select=id,name,restaurant_name,email,address,tax_number,net_days'),
     ]);
 
     const varMap = new Map<string, any>((variants || []).map((v: any) => [v.id, v]));
     const cropMap = new Map<string, any>((crops || []).map((c: any) => [c.id, c]));
     const custMap = new Map<string, any>((customers || []).map((c: any) => [c.id, c]));
 
-    // Group orders by customer
+    // Group orders by customer — include even if customer not in custMap (fetch all customers without deleted_at filter as fallback)
     const byCustomer = new Map<string, any[]>();
     for (const order of (orders || [])) {
       if (!byCustomer.has(order.customer_id)) byCustomer.set(order.customer_id, []);
@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
     const invoices = Array.from(byCustomer.entries()).map(([customerId, custOrders]) => {
       const customer = custMap.get(customerId);
       if (!customer) return null;
+      const customerName = customer.restaurant_name || customer.name || 'Unknown';
 
       // Build line items: one per order per applicable Tuesday
       const lines: any[] = [];
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
 
       return {
         customer_id: customerId,
-        customer_name: customer.restaurant_name || customer.name,
+        customer_name: customerName,
         customer_email: customer.email,
         customer_address: customer.address,
         customer_tax_number: customer.tax_number,
