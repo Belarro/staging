@@ -107,7 +107,18 @@ export async function GET(request: NextRequest) {
       };
     }).filter(Boolean).sort((a: any, b: any) => a.customer_name.localeCompare(b.customer_name));
 
-    return NextResponse.json({ success: true, data: invoices, tuesdays: tuesdays.map(t => t.toISOString().split('T')[0]) });
+    return NextResponse.json({
+      success: true,
+      data: invoices,
+      tuesdays: tuesdays.map(t => t.toISOString().split('T')[0]),
+      _debug: {
+        order_count: (orders || []).length,
+        variant_count: (variants || []).length,
+        crop_count: (crops || []).length,
+        customer_count: (customers || []).length,
+        invoices_generated: invoices.length,
+      }
+    });
   } catch (error) {
     console.error('Invoice generate error:', error);
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
