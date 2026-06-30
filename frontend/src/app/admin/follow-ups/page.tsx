@@ -355,7 +355,7 @@ export default function FollowUpsPage() {
           to: followup.location.email,
           subject,
           body: followup.message_text,
-          language: followup.location.language || 'EN',
+          language: followup.location.language || 'DE',
         }),
       });
       const json = await res.json();
