@@ -34,6 +34,14 @@ interface ActiveBatch {
   crop: { name_en: string; name_de: string };
 }
 
+interface SeedScheduleDay {
+  date: string;
+  display: string;
+  day: 'Tuesday' | 'Friday';
+  total_trays: number;
+  items: { crop_name: string; trays: number; grams_needed: number; harvest_display: string }[];
+}
+
 interface ProductionData {
   schedule: {
     harvest_date: string;
@@ -43,6 +51,7 @@ interface ProductionData {
   }[];
   seed_tuesday: any[];
   seed_friday: any[];
+  seed_schedule: SeedScheduleDay[];
   active_batches: ActiveBatch[];
   ready_to_harvest: ActiveBatch[];
   today: string;
@@ -59,6 +68,7 @@ export default function ProductionPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'seeding' | 'delivery' | 'growing' | 'harvest'>('seeding');
 
+  const [seedView, setSeedView] = useState<'week' | '4weeks'>('week');
   const [harvestModal, setHarvestModal] = useState<ActiveBatch | null>(null);
   const [harvestForm, setHarvestForm] = useState({ actual_yield_grams: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -152,79 +162,148 @@ export default function ProductionPage() {
         <>
           {/* ── SEEDING TAB ── */}
           {activeTab === 'seeding' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-              {/* Tuesday */}
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div className="bg-blue-50 border-b border-blue-100 px-5 py-4 flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-gray-900">Tuesday Seeding</div>
-                    <div className="text-xs text-gray-500">{data?.next_tuesday ? fmt(data.next_tuesday) : ''} — long cycle (11+ days)</div>
-                  </div>
-                  {tuesdayItems.length > 0 && (
-                    <span className="text-2xl font-extrabold text-blue-600">
-                      {tuesdayItems.reduce((s, i) => s + i.trays, 0)}
-                      <span className="text-sm font-normal text-gray-500 ml-1">trays</span>
-                    </span>
-                  )}
+            <div className="space-y-4">
+              {/* View toggle */}
+              <div className="flex items-center gap-2">
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button onClick={() => setSeedView('week')}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${seedView === 'week' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    This Week
+                  </button>
+                  <button onClick={() => setSeedView('4weeks')}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${seedView === '4weeks' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    4-Week View
+                  </button>
                 </div>
-                {tuesdayItems.length === 0 ? (
-                  <div className="p-8 text-center text-gray-400 text-sm">Nothing to seed this Tuesday</div>
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
-                        <th className="px-5 py-2 text-left">Variety</th>
-                        <th className="px-5 py-2 text-right">Trays</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {tuesdayItems.map((item, i) => (
-                        <tr key={i} className="hover:bg-gray-50">
-                          <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
-                          <td className="px-5 py-3 text-right font-bold text-gray-900">{item.trays}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
               </div>
 
-              {/* Friday */}
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div className="bg-purple-50 border-b border-purple-100 px-5 py-4 flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-gray-900">Friday Seeding</div>
-                    <div className="text-xs text-gray-500">{data?.next_friday ? fmt(data.next_friday) : ''} — short cycle (up to 10 days)</div>
+              {seedView === 'week' ? (
+                /* ── THIS WEEK: two cards side by side ── */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Tuesday */}
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="bg-blue-50 border-b border-blue-100 px-5 py-4 flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-gray-900">Tuesday Seeding</div>
+                        <div className="text-xs text-gray-500">{data?.next_tuesday ? fmt(data.next_tuesday) : ''} — long cycle (11+ days)</div>
+                      </div>
+                      {tuesdayItems.length > 0 && (
+                        <span className="text-2xl font-extrabold text-blue-600">
+                          {tuesdayItems.reduce((s, i) => s + i.trays, 0)}
+                          <span className="text-sm font-normal text-gray-500 ml-1">trays</span>
+                        </span>
+                      )}
+                    </div>
+                    {tuesdayItems.length === 0 ? (
+                      <div className="p-8 text-center text-gray-400 text-sm">Nothing to seed this Tuesday</div>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
+                            <th className="px-5 py-2 text-left">Variety</th>
+                            <th className="px-5 py-2 text-right">Trays</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {tuesdayItems.map((item, i) => (
+                            <tr key={i} className="hover:bg-gray-50">
+                              <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
+                              <td className="px-5 py-3 text-right font-bold text-gray-900">{item.trays}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
-                  {fridayItems.length > 0 && (
-                    <span className="text-2xl font-extrabold text-purple-600">
-                      {fridayItems.reduce((s, i) => s + i.trays, 0)}
-                      <span className="text-sm font-normal text-gray-500 ml-1">trays</span>
-                    </span>
+
+                  {/* Friday */}
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="bg-purple-50 border-b border-purple-100 px-5 py-4 flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-gray-900">Friday Seeding</div>
+                        <div className="text-xs text-gray-500">{data?.next_friday ? fmt(data.next_friday) : ''} — short cycle (up to 10 days)</div>
+                      </div>
+                      {fridayItems.length > 0 && (
+                        <span className="text-2xl font-extrabold text-purple-600">
+                          {fridayItems.reduce((s, i) => s + i.trays, 0)}
+                          <span className="text-sm font-normal text-gray-500 ml-1">trays</span>
+                        </span>
+                      )}
+                    </div>
+                    {fridayItems.length === 0 ? (
+                      <div className="p-8 text-center text-gray-400 text-sm">Nothing to seed this Friday</div>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
+                            <th className="px-5 py-2 text-left">Variety</th>
+                            <th className="px-5 py-2 text-right">Trays</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {fridayItems.map((item, i) => (
+                            <tr key={i} className="hover:bg-gray-50">
+                              <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
+                              <td className="px-5 py-3 text-right font-bold text-gray-900">{item.trays}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* ── 4-WEEK VIEW: vertical list of seed day cards ── */
+                <div className="space-y-3">
+                  {!data?.seed_schedule?.length ? (
+                    <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
+                      No seeding scheduled for the next 4 weeks.
+                    </div>
+                  ) : (
+                    data.seed_schedule.map((day) => (
+                      <div key={day.date} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        <div className={`border-b px-5 py-3 flex items-center justify-between ${
+                          day.day === 'Tuesday' ? 'bg-blue-50 border-blue-100' : 'bg-purple-50 border-purple-100'
+                        }`}>
+                          <div className="flex items-center gap-3">
+                            <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full ${
+                              day.day === 'Tuesday' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                            }`}>{day.day}</span>
+                            <span className="font-semibold text-gray-900">{day.display}</span>
+                            <span className="text-xs text-gray-400">
+                              {day.day === 'Tuesday' ? 'long cycle (11+ days)' : 'short cycle (up to 10 days)'}
+                            </span>
+                          </div>
+                          <span className={`text-lg font-extrabold ${day.day === 'Tuesday' ? 'text-blue-600' : 'text-purple-600'}`}>
+                            {day.total_trays}
+                            <span className="text-xs font-normal text-gray-500 ml-1">trays</span>
+                          </span>
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
+                              <th className="px-5 py-2 text-left">Variety</th>
+                              <th className="px-5 py-2 text-right">Trays</th>
+                              <th className="px-5 py-2 text-right">Grams</th>
+                              <th className="px-5 py-2 text-right">Harvest</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {day.items.map((item, i) => (
+                              <tr key={i} className="hover:bg-gray-50">
+                                <td className="px-5 py-2.5 font-semibold text-gray-900">{item.crop_name}</td>
+                                <td className="px-5 py-2.5 text-right font-bold text-gray-900">{item.trays}</td>
+                                <td className="px-5 py-2.5 text-right text-gray-500 text-xs">{item.grams_needed}g</td>
+                                <td className="px-5 py-2.5 text-right text-gray-400 text-xs">{item.harvest_display}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))
                   )}
                 </div>
-                {fridayItems.length === 0 ? (
-                  <div className="p-8 text-center text-gray-400 text-sm">Nothing to seed this Friday</div>
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-xs font-semibold text-gray-400 uppercase border-b border-gray-100">
-                        <th className="px-5 py-2 text-left">Variety</th>
-                        <th className="px-5 py-2 text-right">Trays</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {fridayItems.map((item, i) => (
-                        <tr key={i} className="hover:bg-gray-50">
-                          <td className="px-5 py-3 font-semibold text-gray-900">{item.crop_name}</td>
-                          <td className="px-5 py-3 text-right font-bold text-gray-900">{item.trays}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              )}
             </div>
           )}
 

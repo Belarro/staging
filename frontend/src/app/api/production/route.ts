@@ -240,6 +240,75 @@ export async function GET(request: NextRequest) {
         grams_needed: e.grams_needed,
       }));
 
+    // ── 4-WEEK FORWARD SCHEDULE ────────────────────────────────────────
+    // Build seeding list for each of the next 4 Tuesdays and 4 Fridays.
+    // For each seed date we re-run the grams accumulation for that specific week,
+    // so biweekly orders are handled correctly per week.
+
+    const upcomingSeedDates: Array<{ date: Date; day: 'Tuesday' | 'Friday'; weekOffset: number }> = [];
+    for (let w = 0; w < 4; w++) {
+      const tuesdayW = new Date(nextTuesday);
+      tuesdayW.setDate(tuesdayW.getDate() + w * 7);
+      const fridayW = new Date(nextFriday);
+      fridayW.setDate(fridayW.getDate() + w * 7);
+      upcomingSeedDates.push({ date: tuesdayW, day: 'Tuesday', weekOffset: w });
+      upcomingSeedDates.push({ date: fridayW, day: 'Friday', weekOffset: w });
+    }
+    // Sort chronologically
+    upcomingSeedDates.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    const seedSchedule = upcomingSeedDates.map(({ date, day }) => {
+      const weekNum = isoWeek(date);
+      // Accumulate grams for this specific seed date
+      const gramsForWeek = new Map<string, number>();
+      for (const order of (orders || [])) {
+        if (order.frequency === 'biweekly' && weekNum % 2 !== 0) continue;
+        const variant = varMap.get(order.product_variant_id);
+        const crop = variant ? cropMap.get(variant.crop_id) : null;
+        if (!crop) continue;
+        const proc = procMap.get(crop.id);
+        const growDays = proc ? (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0) : 0;
+        if (growDays === 0) continue;
+        // Only include crops that belong on this seed day (Tue=long, Fri=short)
+        const belongsHere = day === 'Tuesday' ? growDays > 10 : growDays <= 10;
+        if (!belongsHere) continue;
+        const orderQty = order.quantity || 1;
+        const sizeGrams = variant?.size_grams || 0;
+        const totalGrams = orderQty * sizeGrams;
+        if (crop.is_mix) {
+          for (const comp of (mixComponentsMap.get(crop.id) || [])) {
+            gramsForWeek.set(comp.component_crop_id, (gramsForWeek.get(comp.component_crop_id) || 0) + totalGrams * (comp.percentage / 100));
+          }
+        } else {
+          gramsForWeek.set(crop.id, (gramsForWeek.get(crop.id) || 0) + totalGrams);
+        }
+      }
+      const items = Array.from(gramsForWeek.entries())
+        .map(([cropId, grams]) => {
+          const crop = cropMap.get(cropId);
+          if (!crop) return null;
+          const yieldPerTray = crop.yield_per_tray_grams || null;
+          const trays = yieldPerTray && grams > 0 ? Math.ceil(grams / yieldPerTray) : 1;
+          // Harvest = next Tuesday on or after (seed date + growDays)
+          const proc = procMap.get(cropId);
+          const growDays = proc ? (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0) : 10;
+          const harvestRaw = new Date(date);
+          harvestRaw.setDate(harvestRaw.getDate() + growDays);
+          const harvestTue = nextTuesdayOnOrAfter(harvestRaw);
+          return { crop_name: crop.name_en, trays, grams_needed: Math.round(grams), harvest_display: fmt(harvestTue) };
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => a.crop_name.localeCompare(b.crop_name));
+
+      return {
+        date: ymd(date),
+        display: fmt(date),
+        day,
+        total_trays: items.reduce((s: number, i: any) => s + i.trays, 0),
+        items,
+      };
+    }).filter(d => d.items.length > 0);
+
     return NextResponse.json({
       success: true,
       data: {
@@ -247,6 +316,7 @@ export async function GET(request: NextRequest) {
         seed_today: flatSeedDay(todayKey),
         seed_tuesday: flatSeedDay(tuesdayKey),
         seed_friday: flatSeedDay(fridayKey),
+        seed_schedule: seedSchedule,
         active_batches: activeBatches,
         ready_to_harvest: readyToHarvest,
         today: todayKey,
