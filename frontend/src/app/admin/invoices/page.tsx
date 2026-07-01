@@ -277,7 +277,7 @@ export default function InvoicesPage() {
           type="month"
           value={month}
           onChange={e => setMonth(e.target.value)}
-          min="2026-06"
+          min="2026-01"
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
         />
       </div>
