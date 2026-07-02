@@ -15,7 +15,9 @@
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.108.2",
+    "@types/bcrypt": "^6.0.0",
     "autoprefixer": "^10.4.0",
+    "bcrypt": "^6.0.0",
     "next": "^16.0.0",
     "postcss": "^8.4.0",
     "react": "^18.0.0",

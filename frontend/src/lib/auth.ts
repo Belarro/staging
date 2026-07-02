@@ -12,15 +12,13 @@ import { getAuthenticatedUser } from '@/lib/supabase-server';
 export async function requireAuth() {
   const user = await getAuthenticatedUser();
   if (!user) {
-    console.log('Auth failed: no user found');
     return {
       ok: false as const,
       response: NextResponse.json(
-        { success: false, error: 'Unauthorized', debug: 'no user in session' },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
       ),
     };
   }
-  console.log('Auth successful:', user.email);
   return { ok: true as const, user };
 }

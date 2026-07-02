@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
 
-const FLYER_EN = 'https://wbqzlxdyjdmbzifhsyil.supabase.co/storage/v1/object/public/assets/flyers/flyer-en.png';
-const FLYER_DE = 'https://wbqzlxdyjdmbzifhsyil.supabase.co/storage/v1/object/public/assets/flyers/flyer-de.png';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+if (!SUPABASE_URL) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_URL is required');
+}
+const FLYER_EN = `${SUPABASE_URL}/storage/v1/object/public/assets/flyers/flyer-en.png`;
+const FLYER_DE = `${SUPABASE_URL}/storage/v1/object/public/assets/flyers/flyer-de.png`;
 
 async function getValidAccessToken(): Promise<string> {
   const rows = await fetchFromSupabase('/gmail_tokens?email=eq.hello%40belarro.com&select=*');
@@ -80,12 +84,20 @@ function buildMimeEmail({
 }
 
 export async function POST(request: NextRequest) {
-  // Allow CORS for SalesTracker PWA
+  // CORS: only allow specific origins
   const origin = request.headers.get('origin') || '';
+  const ALLOWED_ORIGINS = [
+    'https://belarro.de',
+    'https://www.belarro.de',
+    process.env.SALETRACKER_URL || 'https://sales.belarro.com',
+  ];
+
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : '';
   const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Credentials': 'true',
   };
 
   if (request.method === 'OPTIONS') {
