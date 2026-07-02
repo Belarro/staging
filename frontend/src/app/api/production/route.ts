@@ -261,25 +261,33 @@ export async function GET(request: NextRequest) {
       const weekNum = isoWeek(date);
       // Accumulate grams for this specific seed date
       const gramsForWeek = new Map<string, number>();
+      const growDaysOf = (cropId: string): number => {
+        const p = procMap.get(cropId);
+        return p ? (p.stack_days || 0) + (p.blackout_days || 0) + (p.light_days || 0) : 0;
+      };
       for (const order of (orders || [])) {
         if (order.frequency === 'biweekly' && weekNum % 2 !== 0) continue;
         const variant = varMap.get(order.product_variant_id);
         const crop = variant ? cropMap.get(variant.crop_id) : null;
         if (!crop) continue;
-        const proc = procMap.get(crop.id);
-        const growDays = proc ? (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0) : 0;
-        if (growDays === 0) continue;
-        // Only include crops that belong on this seed day (Tue=long, Fri=short)
-        const belongsHere = day === 'Tuesday' ? growDays > 10 : growDays <= 10;
-        if (!belongsHere) continue;
         const orderQty = order.quantity || 1;
         const sizeGrams = variant?.size_grams || 0;
         const totalGrams = orderQty * sizeGrams;
+        // Mixes have no procedure of their own — expand into components and
+        // bucket each component by ITS OWN grow days (Tue=long, Fri=short).
         if (crop.is_mix) {
           for (const comp of (mixComponentsMap.get(crop.id) || [])) {
+            const compGrowDays = growDaysOf(comp.component_crop_id);
+            if (compGrowDays === 0) continue;
+            const belongsHere = day === 'Tuesday' ? compGrowDays > 10 : compGrowDays <= 10;
+            if (!belongsHere) continue;
             gramsForWeek.set(comp.component_crop_id, (gramsForWeek.get(comp.component_crop_id) || 0) + totalGrams * (comp.percentage / 100));
           }
         } else {
+          const growDays = growDaysOf(crop.id);
+          if (growDays === 0) continue;
+          const belongsHere = day === 'Tuesday' ? growDays > 10 : growDays <= 10;
+          if (!belongsHere) continue;
           gramsForWeek.set(crop.id, (gramsForWeek.get(crop.id) || 0) + totalGrams);
         }
       }
