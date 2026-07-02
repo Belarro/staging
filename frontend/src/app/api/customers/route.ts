@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 import { fetchFromSupabase } from '@/lib/supabase';
-// import removed
 
 export async function GET(request: NextRequest) {
   try {
-    // const auth = await requireAuth();
-    // if (!auth.ok) return auth.response;
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
 
     // Fetch Belarro customers + SalesTracker locations in parallel
     const [customers, locations] = await Promise.all([
