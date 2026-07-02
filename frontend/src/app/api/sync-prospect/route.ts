@@ -124,9 +124,10 @@ async function syncCustomer(payload: ProspectPayload) {
   };
 
   if (existing) {
-    // UPDATE: only update mutable fields
+    // UPDATE: optimistic locking via updated_at timestamp
+    // Only update if updated_at matches (prevents race conditions)
     const updatePayload = await fetchFromSupabase(
-      `/belarro_v4_customer?id=eq.${customerId}`,
+      `/belarro_v4_customer?id=eq.${customerId}&updated_at=eq.${encodeURIComponent(existing.updated_at || '')}`,
       {
         method: 'PATCH',
         body: JSON.stringify({
@@ -148,6 +149,15 @@ async function syncCustomer(payload: ProspectPayload) {
         }),
       }
     );
+
+    // If 0 rows affected, conflict detected — return 409
+    if (!updatePayload || updatePayload.length === 0) {
+      return {
+        success: false,
+        error: 'Conflict: customer was modified by another request. Retry with latest data.',
+        statusCode: 409,
+      } as any;
+    }
 
     return { id: customerId, isNew: false };
   } else {
@@ -224,7 +234,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Sync customer (insert or update)
-    const { id: customerId, isNew } = await syncCustomer(payload);
+    const result = await syncCustomer(payload);
+
+    // Handle conflict
+    if ('statusCode' in result && result.statusCode === 409) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: result.error,
+        },
+        { status: 409 }
+      );
+    }
+
+    const { id: customerId, isNew } = result;
 
     // Only seed follow-ups if this is a NEW customer
     if (isNew) {
