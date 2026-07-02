@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-// import removed
+import { requireAuth } from '@/lib/auth';
 import { fetchFromSupabase } from '@/lib/supabase';
 import { logError } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    // const auth = await requireAuth();
-    // if (!auth.ok) return auth.response;
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
     const { searchParams } = new URL(request.url);
     const cropId = searchParams.get('id');
 
