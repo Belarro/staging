@@ -11,13 +11,14 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 async function ensureBucketExists() {
   const url = `${SUPABASE_URL}/storage/v1/bucket`;
   try {
+    const headers: Record<string, string> = {
+      'apikey': SUPABASE_SERVICE_ROLE_KEY!,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY!}`,
+      'Content-Type': 'application/json',
+    };
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'apikey': SUPABASE_SERVICE_ROLE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         id: 'crop-photos',
         name: 'crop-photos',
@@ -59,13 +60,14 @@ export async function POST(request: NextRequest) {
 
     // Upload to Supabase Storage via REST API
     const uploadUrl = `${SUPABASE_URL}/storage/v1/object/crop-photos/${filename}`;
+    const headers: Record<string, string> = {
+      'apikey': SUPABASE_SERVICE_ROLE_KEY!,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY!}`,
+      'Content-Type': file.type || 'image/jpeg',
+    };
     let uploadRes = await fetch(uploadUrl, {
       method: 'POST',
-      headers: {
-        'apikey': SUPABASE_SERVICE_ROLE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': file.type || 'image/jpeg',
-      },
+      headers,
       body: buffer,
     });
 
