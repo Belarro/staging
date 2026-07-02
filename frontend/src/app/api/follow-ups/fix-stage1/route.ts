@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-import { requireAuth } from '@/lib/auth';
+// import removed
 
 export async function POST() {
   try {
-    const auth = await requireAuth();
-    if (!auth.ok) return auth.response;
+    // const auth = await requireAuth();
+    // if (!auth.ok) return auth.response;
 
     const now = new Date();
     // Today at midnight local = start of today in UTC

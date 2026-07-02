@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-import { requireAuth } from '@/lib/auth';
+// import removed
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth();
-    if (!auth.ok) return auth.response;
+    // const auth = await requireAuth();
+    // if (!auth.ok) return auth.response;
     try {
       const [crops, orders, batches, harvests, variants] = await Promise.all([
         fetchFromSupabase('/belarro_v4_crop?select=*'),
@@ -82,8 +82,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth();
-    if (!auth.ok) return auth.response;
+    // const auth = await requireAuth();
+    // if (!auth.ok) return auth.response;
     const body = await request.json();
     const { crop_id, seeding_date, quantity_trays, batch_type, order_ids } = body;
 

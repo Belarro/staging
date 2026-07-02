@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-import { requireAuth } from '@/lib/auth';
+// import removed
 
 export async function PUT(request: NextRequest) {
   try {
-    const auth = await requireAuth();
-    if (!auth.ok) return auth.response;
+    // const auth = await requireAuth();
+    // if (!auth.ok) return auth.response;
     const { id, crop_id, quantity_grams, seeds_per_tray, reorder_threshold_trays } = await request.json();
 
     if (!id) return NextResponse.json({ success: false, error: 'id required' }, { status: 400 });

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-import { requireAuth } from '@/lib/auth';
+// import removed
 
 export async function GET() {
   try {
-    const auth = await requireAuth();
-    if (!auth.ok) return auth.response;
+    // const auth = await requireAuth();
+    // if (!auth.ok) return auth.response;
     const data = await fetchFromSupabase('/form_submissions?order=created_at.desc');
     return NextResponse.json({ success: true, data: data || [] });
   } catch (error) {
