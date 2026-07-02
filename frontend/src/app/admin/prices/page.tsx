@@ -271,8 +271,9 @@ export default function PricesPage() {
                   </td>
                   {allSizes.map(size => {
                     const cell = crop.cells[size] ?? { price: '', container: '', qty: '1' };
+                    const hasData = cell.price !== '';
                     return (
-                      <td key={size} className="px-2 py-2">
+                      <td key={size} className={`px-2 py-2 ${hasData ? 'bg-green-50' : ''}`}>
                         <div className="flex gap-1 items-center">
                           {/* Price */}
                           <div className="flex items-center gap-0.5 min-w-0">
@@ -281,7 +282,7 @@ export default function PricesPage() {
                               type="number" min="0" step="0.01"
                               value={cell.price}
                               onChange={e => handleCellChange(crop.id, size, 'price', e.target.value)}
-                              className="w-14 text-center text-xs border border-gray-200 rounded px-1 py-1.5 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 bg-transparent"
+                              className={`w-14 text-center text-xs border rounded px-1 py-1.5 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 ${hasData ? 'bg-white border-green-300' : 'bg-transparent border-gray-200'}`}
                               placeholder="—"
                             />
                           </div>
@@ -289,7 +290,7 @@ export default function PricesPage() {
                           <select
                             value={cell.container}
                             onChange={e => handleCellChange(crop.id, size, 'container', e.target.value)}
-                            className="w-20 text-xs border border-gray-200 rounded px-1 py-1.5 outline-none focus:border-green-400 bg-transparent text-gray-700"
+                            className={`w-20 text-xs border rounded px-1 py-1.5 outline-none focus:border-green-400 text-gray-700 ${hasData ? 'bg-white border-green-300' : 'bg-transparent border-gray-200'}`}
                           >
                             <option value="">—</option>
                             {packagingSizes.map(ps => (
@@ -301,7 +302,7 @@ export default function PricesPage() {
                             type="number" min="1" step="1"
                             value={cell.qty}
                             onChange={e => handleCellChange(crop.id, size, 'qty', e.target.value)}
-                            className="w-10 text-center text-xs border border-gray-200 rounded px-1 py-1.5 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 bg-transparent"
+                            className={`w-10 text-center text-xs border rounded px-1 py-1.5 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 ${hasData ? 'bg-white border-green-300' : 'bg-transparent border-gray-200'}`}
                             placeholder="1"
                           />
                         </div>
