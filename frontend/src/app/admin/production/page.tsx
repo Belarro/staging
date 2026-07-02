@@ -42,6 +42,22 @@ interface SeedScheduleDay {
   items: { crop_name: string; trays: number; grams_needed: number; harvest_display: string }[];
 }
 
+interface DailyTask {
+  crop_name: string;
+  crop_id: string;
+  grams_needed: number;
+  trays_needed: number;
+  task_type: 'soak' | 'seed' | 'stack' | 'blackout' | 'light' | 'humidity_dome' | 'harvest';
+  notes?: string;
+}
+
+interface DailyOperation {
+  date: string;
+  display: string;
+  day_of_week: string;
+  tasks: DailyTask[];
+}
+
 interface ProductionData {
   schedule: {
     harvest_date: string;
@@ -65,8 +81,9 @@ function fmt(dateStr: string) {
 
 export default function ProductionPage() {
   const [data, setData] = useState<ProductionData | null>(null);
+  const [dailyOps, setDailyOps] = useState<DailyOperation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'seeding' | 'delivery' | 'growing' | 'harvest'>('seeding');
+  const [activeTab, setActiveTab] = useState<'seeding' | 'delivery' | 'growing' | 'harvest' | 'daily-ops'>('seeding');
 
   const [seedView, setSeedView] = useState<'week' | '4weeks'>('week');
   const [harvestModal, setHarvestModal] = useState<ActiveBatch | null>(null);
@@ -76,9 +93,14 @@ export default function ProductionPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/production');
-      const json = await res.json();
-      if (json.success) setData(json.data);
+      const [prodRes, opsRes] = await Promise.all([
+        fetch('/api/production'),
+        fetch('/api/daily-operations'),
+      ]);
+      const prodJson = await prodRes.json();
+      const opsJson = await opsRes.json();
+      if (prodJson.success) setData(prodJson.data);
+      if (opsJson.success) setDailyOps(opsJson.data.daily_operations || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -142,6 +164,7 @@ export default function ProductionPage() {
         {[
           { key: 'seeding', label: 'Seeding' },
           { key: 'delivery', label: 'Delivery' },
+          { key: 'daily-ops', label: 'Daily Operations' },
           { key: 'growing', label: `Growing (${data?.active_batches.length ?? 0})` },
           { key: 'harvest', label: `Harvest (${data?.ready_to_harvest.length ?? 0})`, urgent: (data?.ready_to_harvest.length ?? 0) > 0 },
         ].map(t => (
@@ -395,6 +418,64 @@ export default function ProductionPage() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── DAILY OPERATIONS TAB ── */}
+          {activeTab === 'daily-ops' && (
+            <div className="space-y-4">
+              {dailyOps.length === 0 ? (
+                <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
+                  No operations scheduled.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {dailyOps.map((day) => (
+                    <div key={day.date} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="bg-gray-50 border-b border-gray-200 px-5 py-3 flex items-center justify-between">
+                        <div>
+                          <div className="font-bold text-gray-900">{day.display}</div>
+                          <div className="text-xs text-gray-500">{day.day_of_week}</div>
+                        </div>
+                        <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full">
+                          {day.tasks.length} task{day.tasks.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {day.tasks.map((task, idx) => {
+                          const taskColors: Record<string, string> = {
+                            'soak': 'bg-blue-50 text-blue-700 border-blue-100',
+                            'seed': 'bg-green-50 text-green-700 border-green-100',
+                            'stack': 'bg-orange-50 text-orange-700 border-orange-100',
+                            'blackout': 'bg-gray-50 text-gray-700 border-gray-100',
+                            'light': 'bg-yellow-50 text-yellow-700 border-yellow-100',
+                            'humidity_dome': 'bg-cyan-50 text-cyan-700 border-cyan-100',
+                            'harvest': 'bg-amber-50 text-amber-700 border-amber-100',
+                          };
+                          const color = taskColors[task.task_type] || 'bg-gray-50 text-gray-700 border-gray-100';
+                          return (
+                            <div key={idx} className="px-5 py-4 flex items-start justify-between hover:bg-gray-50 transition">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3">
+                                  <span className={`px-2 py-1 text-xs font-bold rounded border ${color}`}>
+                                    {task.task_type.replace('_', ' ')}
+                                  </span>
+                                  <span className="font-semibold text-gray-900">{task.crop_name}</span>
+                                </div>
+                                {task.notes && <p className="text-xs text-gray-500 mt-1 ml-0">{task.notes}</p>}
+                              </div>
+                              <div className="text-right ml-4">
+                                <div className="text-sm font-bold text-gray-900">{task.trays_needed} trays</div>
+                                <div className="text-xs text-gray-500">{task.grams_needed}g</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
