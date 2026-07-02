@@ -17,6 +17,7 @@ interface Customer {
   city?: string;
   status: 'prospect' | 'active' | 'paused' | 'inactive';
   net_days: number;
+  pause_reason?: string | null;
   interest_level?: string | null;
   visit_notes?: string | null;
   sales_rep?: string | null;
@@ -62,7 +63,8 @@ export default function CustomersPage() {
     address: '',
     city: '',
     net_days: '30',
-    status: 'prospect' as 'prospect' | 'active' | 'paused' | 'inactive'
+    status: 'prospect' as 'prospect' | 'active' | 'paused' | 'inactive',
+    pause_reason: ''
   });
 
   const fetchCustomers = async () => {
@@ -171,7 +173,8 @@ export default function CustomersPage() {
       address: '',
       city: '',
       net_days: '30',
-      status: 'prospect'
+      status: 'prospect',
+      pause_reason: ''
     });
     setEditingCustomer(null);
   };
@@ -190,7 +193,8 @@ export default function CustomersPage() {
       address: c.address || '',
       city: c.city || '',
       net_days: c.net_days.toString(),
-      status: c.status
+      status: c.status,
+      pause_reason: c.pause_reason || ''
     });
     setShowModal(true);
   };
@@ -369,6 +373,9 @@ export default function CustomersPage() {
                   )}
                   {c.interest_level && (
                     <div>⭐ Interest: <span className={`font-semibold capitalize ${c.interest_level === 'high' ? 'text-green-600' : c.interest_level === 'medium' ? 'text-amber-600' : 'text-gray-500'}`}>{c.interest_level}</span></div>
+                  )}
+                  {c.status === 'paused' && c.pause_reason && (
+                    <div className="text-amber-600 font-semibold">⏸️ Paused: {c.pause_reason}</div>
                   )}
                   {c.visit_notes && (
                     <div className="italic text-gray-400 line-clamp-2">"{c.visit_notes}"</div>
@@ -578,6 +585,19 @@ export default function CustomersPage() {
                 </select>
                 <p className="text-xs text-gray-500 mt-1">Funnel Stage tracks the customer's buying status throughout their lifecycle.</p>
               </div>
+
+              {formData.status === 'paused' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Pause Reason</label>
+                  <input
+                    type="text"
+                    value={formData.pause_reason}
+                    onChange={e => setFormData({ ...formData, pause_reason: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                    placeholder="e.g., Kitchen renovation, Seasonal closure, Budget constraints"
+                  />
+                </div>
+              )}
 
               <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-3">
                 <button
