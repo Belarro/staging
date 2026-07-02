@@ -647,13 +647,25 @@ export default function InventoryPage() {
                   <select
                     required
                     value={seedForm.crop_id}
-                    onChange={e => setSeedForm({ ...seedForm, crop_id: e.target.value })}
+                    onChange={e => {
+                      const selectedId = e.target.value;
+                      if (seeds.some(s => s.crop_id === selectedId)) {
+                        alert('This crop is already in your seed inventory. Use "+ Received" to add more seeds.');
+                        return;
+                      }
+                      setSeedForm({ ...seedForm, crop_id: selectedId });
+                    }}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
                   >
                     <option value="">Select Crop...</option>
-                    {crops
-                      .filter(c => !seeds.some(s => s.crop_id === c.id))
-                      .map(c => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+                    {crops.map(c => {
+                      const isInInventory = seeds.some(s => s.crop_id === c.id);
+                      return (
+                        <option key={c.id} value={c.id} disabled={isInInventory}>
+                          {c.name_en} {isInInventory ? '(already in inventory)' : ''}
+                        </option>
+                      );
+                    })}
                     <option value="new" className="font-semibold text-green-600">+ Add New Variety</option>
                   </select>
                 )}
