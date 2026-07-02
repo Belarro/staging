@@ -146,12 +146,17 @@ export async function GET(request: NextRequest) {
     );
     const locMap = new Map<string, any>((locations || []).map((l: any) => [l.id, l]));
 
+    // Stages where follow-ups must stop: became a client (active/closed_won),
+    // explicitly lost, or snoozed. Set either in the admin (convert button)
+    // or in the sales tracker (closed_won/closed_lost).
+    const STOPPED_STAGES = new Set(['active', 'snoozed', 'closed_won', 'closed_lost', 'converted']);
+
     // Only keep next pending follow-up per location
     const nextPerLocation = new Map<string, any>();
     for (const f of fls) {
       const loc = locMap.get(f.location_id);
       if (!loc) continue;
-      if (loc.pipeline_stage === 'active' || loc.pipeline_stage === 'snoozed') continue;
+      if (STOPPED_STAGES.has(loc.pipeline_stage)) continue;
       if (f.status !== 'pending' && f.status !== 'replied') continue;
       const stage = f.stage || f.follow_up_number || 1;
       const existing = nextPerLocation.get(f.location_id);

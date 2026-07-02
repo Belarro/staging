@@ -67,33 +67,16 @@ export async function POST(request: NextRequest) {
       }),
     });
 
-    // --- Generate the 5 standard follow-ups ---
-    const followUps = [];
-    for (let i = 0; i < FOLLOW_UP_DAYS.length; i++) {
-      const due = new Date();
-      due.setDate(due.getDate() + FOLLOW_UP_DAYS[i]);
-      const fu = await fetchFromSupabase('/belarro_v4_follow_up', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: crypto.randomUUID(),
-          customer_id: customerId,
-          follow_up_number: i + 1,
-          follow_up_days: FOLLOW_UP_DAYS[i],
-          due_date: due.toISOString(),
-          status: 'pending',
-          sent_via: null,
-          sent_date: null,
-          notes: 'Auto-created from saletracker closed deal',
-        }),
-      });
-      followUps.push(fu);
-    }
+    // NOTE: no follow-ups on closed deals. Per spec, becoming a client STOPS
+    // the follow-up sequence — the sales tracker sets pipeline_stage
+    // closed_won on the location, which the follow-ups page filters out.
+    // (Previously this seeded 5 customer_id-based follow-ups that no page
+    // could display.)
 
     return NextResponse.json({
       success: true,
       id: customerId,
-      message: 'Customer + 5 follow-ups created from closed deal.',
-      follow_ups_created: followUps.length,
+      message: 'Customer created from closed deal.',
     });
   } catch (error) {
     console.error('Sync error:', error);

@@ -249,10 +249,10 @@ export async function POST(request: NextRequest) {
 
     const { id: customerId, isNew } = result;
 
-    // Only seed follow-ups if this is a NEW customer
-    if (isNew) {
-      await seedFollowUps(customerId, payload.visitDate || new Date().toISOString());
-    }
+    // NOTE: no follow-up seeding here. Prospect follow-ups live on the
+    // locations table (synced from the sales tracker) — customer_id-based
+    // follow-ups are invisible to the Follow-ups page and were creating
+    // orphan rows.
 
     return NextResponse.json({
       success: true,

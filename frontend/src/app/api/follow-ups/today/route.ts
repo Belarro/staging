@@ -31,12 +31,15 @@ export async function GET(_request: NextRequest) {
     )) || [];
     const locMap = new Map<string, any>(locations.map((l: any) => [l.id, l]));
 
+    // Stages where follow-ups must stop (client won, lost, or snoozed)
+    const STOPPED_STAGES = new Set(['active', 'snoozed', 'closed_won', 'closed_lost', 'converted']);
+
     // Only the next (lowest-stage) pending follow-up per location
     const nextPerLocation = new Map<string, any>();
     for (const f of followups) {
       const loc = locMap.get(f.location_id);
       if (!loc) continue;
-      if (loc.pipeline_stage === 'active' || loc.pipeline_stage === 'snoozed') continue;
+      if (STOPPED_STAGES.has(loc.pipeline_stage)) continue;
       const stage = f.stage || f.follow_up_number || 1;
       const existing = nextPerLocation.get(f.location_id);
       if (!existing || stage < (existing.stage || existing.follow_up_number || 1)) {
