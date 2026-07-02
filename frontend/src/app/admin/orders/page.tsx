@@ -109,8 +109,14 @@ export default function OrdersPage() {
     setSubmitting(true);
     try {
       const validLines = addLines.filter(l => l.product_variant_id);
+      if (!validLines.length) {
+        alert('Please select at least one product');
+        setSubmitting(false);
+        return;
+      }
+
       for (const line of validLines) {
-        await fetch('/api/orders', {
+        const res = await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -121,11 +127,21 @@ export default function OrdersPage() {
             frequency: line.frequency || 'weekly',
           }),
         });
+
+        const json = await res.json();
+        if (!json.success) {
+          alert(`Failed: ${json.error}`);
+          setSubmitting(false);
+          return;
+        }
       }
+
       setShowAddModal(false);
       setAddCustomerId('');
       setAddLines([emptyLine()]);
       fetchOrders();
+    } catch (error) {
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown'}`);
     } finally {
       setSubmitting(false);
     }

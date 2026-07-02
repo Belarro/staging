@@ -126,6 +126,11 @@ export default function CustomersPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      if (!formData.name) {
+        alert('Name is required');
+        return;
+      }
+
       const payload = {
         ...formData,
         net_days: parseInt(formData.net_days) || 30
@@ -145,9 +150,11 @@ export default function CustomersPage() {
         setShowModal(false);
         resetForm();
         fetchCustomers();
+      } else {
+        alert(`Error: ${json.error}`);
       }
     } catch (error) {
-      console.error('Failed to save customer:', error);
+      alert(`Failed: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
   };
 
