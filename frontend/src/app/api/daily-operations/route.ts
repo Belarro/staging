@@ -31,7 +31,7 @@ interface DailyTask {
   crop_id: string;
   grams_needed: number;
   trays_needed: number;
-  task_type: 'soak' | 'seed_stack' | 'blackout' | 'light' | 'harvest';
+  task_type: 'soak' | 'seed_stack' | 'cover_soil' | 'blackout' | 'light' | 'harvest';
   notes?: string;
 }
 
@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build daily operations calendar
+    // Build daily operations calendar showing only phase transitions
     const dailyOpsMap = new Map<string, DailyTask[]>();
 
     for (const plan of seedingPlans) {
@@ -184,75 +184,87 @@ export async function GET(request: NextRequest) {
           grams_needed: plan.grams_needed,
           trays_needed: plan.trays_needed,
           task_type: 'soak',
-          notes: `Soak for ${proc.soak_hours}h${proc.soak_notes ? ' (' + proc.soak_notes + ')' : ''}`,
+          notes: `Soak ${proc.soak_hours}h${proc.soak_notes ? ' - ' + proc.soak_notes : ''}`,
         });
       }
 
       // 2. Seed + Stack (same day)
       const seedKey = ymd(seedDate);
       if (!dailyOpsMap.has(seedKey)) dailyOpsMap.set(seedKey, []);
-      const stackNote = proc.stack_enabled ? `Seed & Stack (${proc.stack_days}d)` : 'Seed';
+
+      let seedStackNote = 'Seed';
+      if (proc.stack_enabled && proc.stack_days) {
+        seedStackNote += ` & Stack (${proc.stack_days}d)`;
+      }
+      if (proc.cover_soil_enabled) {
+        seedStackNote += ` + Cover soil${proc.cover_soil_notes ? ' (' + proc.cover_soil_notes + ')' : ''}`;
+      }
+
       dailyOpsMap.get(seedKey)!.push({
         crop_name: plan.crop_name,
         crop_id: plan.crop_id,
         grams_needed: plan.grams_needed,
         trays_needed: plan.trays_needed,
         task_type: 'seed_stack',
-        notes: proc.cover_soil_enabled ? `${stackNote}${proc.cover_soil_notes ? ', ' + proc.cover_soil_notes : ''}` : stackNote,
+        notes: seedStackNote,
       });
 
-      // 3. Blackout period (starts after stack days)
+      // 3. Cover soil (only if NOT combined with seed/stack)
+      if (proc.cover_soil_enabled && !proc.stack_enabled) {
+        if (!dailyOpsMap.has(seedKey)) dailyOpsMap.set(seedKey, []);
+        dailyOpsMap.get(seedKey)!.push({
+          crop_name: plan.crop_name,
+          crop_id: plan.crop_id,
+          grams_needed: plan.grams_needed,
+          trays_needed: plan.trays_needed,
+          task_type: 'cover_soil',
+          notes: proc.cover_soil_notes ? proc.cover_soil_notes : 'Cover with soil',
+        });
+      }
+
+      // 4. Blackout period (starts after stack days) - show only START transition
       if (proc.blackout_enabled && proc.blackout_days) {
         const blackoutStart = new Date(seedDate);
         blackoutStart.setDate(blackoutStart.getDate() + (proc.stack_days || 0));
-        for (let i = 0; i < proc.blackout_days; i++) {
-          const blackoutDate = new Date(blackoutStart);
-          blackoutDate.setDate(blackoutDate.getDate() + i);
-          const blackoutKey = ymd(blackoutDate);
-          if (!dailyOpsMap.has(blackoutKey)) dailyOpsMap.set(blackoutKey, []);
-          dailyOpsMap.get(blackoutKey)!.push({
-            crop_name: plan.crop_name,
-            crop_id: plan.crop_id,
-            grams_needed: plan.grams_needed,
-            trays_needed: plan.trays_needed,
-            task_type: 'blackout',
-            notes: `Blackout (${i + 1}/${proc.blackout_days})${proc.blackout_notes ? ' - ' + proc.blackout_notes : ''}`,
-          });
-        }
+        const blackoutKey = ymd(blackoutStart);
+        if (!dailyOpsMap.has(blackoutKey)) dailyOpsMap.set(blackoutKey, []);
+        dailyOpsMap.get(blackoutKey)!.push({
+          crop_name: plan.crop_name,
+          crop_id: plan.crop_id,
+          grams_needed: plan.grams_needed,
+          trays_needed: plan.trays_needed,
+          task_type: 'blackout',
+          notes: `Move to blackout (${proc.blackout_days}d)${proc.blackout_notes ? ' - ' + proc.blackout_notes : ''}`,
+        });
       }
 
-      // 4. Light period (starts after stack + blackout)
+      // 5. Light period (starts after stack + blackout) - show only START transition
       if (proc.light_enabled && proc.light_days) {
         const lightStart = new Date(seedDate);
         lightStart.setDate(lightStart.getDate() + (proc.stack_days || 0) + (proc.blackout_days || 0));
+        const lightKey = ymd(lightStart);
+        if (!dailyOpsMap.has(lightKey)) dailyOpsMap.set(lightKey, []);
 
-        for (let i = 0; i < proc.light_days; i++) {
-          const lightDate = new Date(lightStart);
-          lightDate.setDate(lightDate.getDate() + i);
-          const lightKey = ymd(lightDate);
-          if (!dailyOpsMap.has(lightKey)) dailyOpsMap.set(lightKey, []);
-
-          // Check if humidity dome applies on this light day
-          const hasDome = proc.humidity_dome_enabled &&
-            proc.humidity_dome_days &&
-            i < proc.humidity_dome_days;
-
-          const notes = hasDome
-            ? `Light + Humidity dome (${i + 1}/${proc.light_days})${proc.humidity_dome_notes ? ' - ' + proc.humidity_dome_notes : ''}`
-            : `Light (${i + 1}/${proc.light_days})${proc.light_notes ? ' - ' + proc.light_notes : ''}`;
-
-          dailyOpsMap.get(lightKey)!.push({
-            crop_name: plan.crop_name,
-            crop_id: plan.crop_id,
-            grams_needed: plan.grams_needed,
-            trays_needed: plan.trays_needed,
-            task_type: 'light',
-            notes,
-          });
+        // Build light task note
+        let lightNote = `Move to light (${proc.light_days}d)`;
+        if (proc.humidity_dome_enabled && proc.humidity_dome_days) {
+          lightNote += ` + Humidity dome (${proc.humidity_dome_days}d)`;
         }
+        if (proc.light_notes) {
+          lightNote += ` - ${proc.light_notes}`;
+        }
+
+        dailyOpsMap.get(lightKey)!.push({
+          crop_name: plan.crop_name,
+          crop_id: plan.crop_id,
+          grams_needed: plan.grams_needed,
+          trays_needed: plan.trays_needed,
+          task_type: 'light',
+          notes: lightNote,
+        });
       }
 
-      // 5. Harvest (on next Tuesday after all growing days)
+      // 6. Harvest (on next Tuesday after all growing days)
       const totalGrowDays = (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0);
       const harvestRaw = new Date(seedDate);
       harvestRaw.setDate(harvestRaw.getDate() + totalGrowDays);

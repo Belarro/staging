@@ -47,7 +47,7 @@ interface DailyTask {
   crop_id: string;
   grams_needed: number;
   trays_needed: number;
-  task_type: 'soak' | 'seed_stack' | 'blackout' | 'light' | 'harvest';
+  task_type: 'soak' | 'seed_stack' | 'cover_soil' | 'blackout' | 'light' | 'harvest';
   notes?: string;
 }
 
@@ -448,12 +448,21 @@ export default function ProductionPage() {
                           const taskColors: Record<string, string> = {
                             'soak': 'bg-blue-50 text-blue-700 border-blue-100',
                             'seed_stack': 'bg-green-50 text-green-700 border-green-100',
+                            'cover_soil': 'bg-orange-50 text-orange-700 border-orange-100',
                             'blackout': 'bg-gray-50 text-gray-700 border-gray-100',
                             'light': 'bg-yellow-50 text-yellow-700 border-yellow-100',
                             'harvest': 'bg-amber-50 text-amber-700 border-amber-100',
                           };
                           const color = taskColors[task.task_type] || 'bg-gray-50 text-gray-700 border-gray-100';
-                          const taskLabel = task.task_type === 'seed_stack' ? 'Seed & Stack' : task.task_type.charAt(0).toUpperCase() + task.task_type.slice(1);
+                          const taskLabels: Record<string, string> = {
+                            'seed_stack': 'Seed & Stack',
+                            'cover_soil': 'Cover Soil',
+                            'soak': 'Soak',
+                            'blackout': 'Blackout',
+                            'light': 'Light',
+                            'harvest': 'Harvest',
+                          };
+                          const taskLabel = taskLabels[task.task_type] || task.task_type;
                           return (
                             <div key={idx} className="px-5 py-4 flex items-start justify-between hover:bg-gray-50 transition">
                               <div className="flex-1">
