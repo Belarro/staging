@@ -644,20 +644,32 @@ export default function InventoryPage() {
                     </button>
                   </div>
                 ) : (
-                  <select
-                    required
-                    value={seedForm.crop_id}
-                    onChange={e => setSeedForm({ ...seedForm, crop_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                  >
-                    <option value="">Select Crop...</option>
-                    {crops
-                      .filter(c => !seeds.some(s => s.crop_id === c.id))
-                      .map(c => (
-                        <option key={c.id} value={c.id}>{c.name_en}</option>
-                      ))}
-                    <option value="new">+ Add New Variety</option>
-                  </select>
+                  <>
+                    <select
+                      required
+                      value={seedForm.crop_id}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === 'new') {
+                          setSeedForm({ ...seedForm, crop_id: 'new' });
+                        } else {
+                          setSeedForm({ ...seedForm, crop_id: val });
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                    >
+                      <option value="">Select Crop...</option>
+                      {crops
+                        .filter(c => !seeds.some(s => s.crop_id === c.id))
+                        .map(c => (
+                          <option key={c.id} value={c.id}>{c.name_en}</option>
+                        ))}
+                      <option value="new">+ Add New Variety</option>
+                    </select>
+                    {seeds.length === 0 && (
+                      <p className="text-xs text-orange-600 mt-1 font-semibold">⚠️ Inventory not fully loaded. Please wait.</p>
+                    )}
+                  </>
                 )}
               </div>
               <div>
