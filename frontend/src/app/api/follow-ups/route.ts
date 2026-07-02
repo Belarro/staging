@@ -176,6 +176,7 @@ export async function GET(request: NextRequest) {
         message_title: title,
         message_text: text,
         whatsapp_number: phone,
+        visited_at: loc.timestamp || loc.created_at || null,
         location: {
           id: loc.id,
           name: loc.location_name,
@@ -185,7 +186,6 @@ export async function GET(request: NextRequest) {
           interest_level: loc.interest_level,
           pipeline_stage: loc.pipeline_stage,
           language: lang,
-          visited_at: loc.timestamp || loc.created_at || null,
           sales_rep: loc.sales_rep || null,
         },
       };
@@ -210,6 +210,7 @@ export async function GET(request: NextRequest) {
         message_title: title,
         message_text: text,
         whatsapp_number: parsePhone(loc.direct_phone) || parsePhone(loc.business_phone),
+        visited_at: loc.timestamp || loc.created_at || null,
         location: {
           id: loc.id,
           name: loc.location_name,
