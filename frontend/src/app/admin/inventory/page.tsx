@@ -94,6 +94,12 @@ export default function InventoryPage() {
     if (submitting) return;
     setSubmitting(true);
     try {
+      if (!seedForm.crop_id || !seedForm.quantity_grams || !seedForm.seeds_per_tray) {
+        alert('Please fill in all required fields');
+        setSubmitting(false);
+        return;
+      }
+
       const res = await fetch('/api/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,7 +110,11 @@ export default function InventoryPage() {
         setShowAddSeed(false);
         setSeedForm({ crop_id: '', quantity_grams: '', seeds_per_tray: '', reorder_threshold_trays: '20' });
         fetchInventory();
+      } else {
+        alert(`Error: ${json.error}`);
       }
+    } catch (error) {
+      alert(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }
