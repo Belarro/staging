@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       created_at: c.created_at,
     }));
 
-    // Build lookup maps for deduplication by phone/email
+    // Build lookup maps for deduplication by phone/email/domain
     const belarroCustIds = new Set(customerRows.map((c: any) => c.id));
     const belarroPhones = new Set(
       customerRows
@@ -48,6 +48,12 @@ export async function GET(request: NextRequest) {
         .map((c: any) => c.email)
         .filter((e: any) => e && e.trim().toLowerCase())
         .map((e: any) => e.toLowerCase())
+    );
+    const belarroEmailDomains = new Set(
+      customerRows
+        .map((c: any) => c.email)
+        .filter((e: any) => e && e.includes('@'))
+        .map((e: any) => e.split('@')[1].toLowerCase())
     );
 
     // Normalize locations rows — map pipeline_stage to status
@@ -70,6 +76,10 @@ export async function GET(request: NextRequest) {
         // Skip if email matches
         const locEmail = (loc.direct_email || loc.business_email || '').toLowerCase();
         if (locEmail && belarroEmails.has(locEmail)) return false;
+
+        // Skip if email domain matches
+        const locEmailDomain = locEmail.includes('@') ? locEmail.split('@')[1].toLowerCase() : '';
+        if (locEmailDomain && belarroEmailDomains.has(locEmailDomain)) return false;
 
         return true;
       })
