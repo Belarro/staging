@@ -52,6 +52,7 @@ export default function InventoryPage() {
   const [submitting, setSubmitting] = useState(false);
   const [seedForm, setSeedForm] = useState({
     crop_id: '',
+    new_crop_name: '',
     quantity_grams: '',
     seeds_per_tray: '',
     reorder_threshold_trays: '20'
@@ -94,8 +95,40 @@ export default function InventoryPage() {
     if (submitting) return;
     setSubmitting(true);
     try {
-      if (!seedForm.crop_id || !seedForm.quantity_grams || !seedForm.seeds_per_tray) {
+      if (!seedForm.quantity_grams || !seedForm.seeds_per_tray) {
         alert('Please fill in all required fields');
+        setSubmitting(false);
+        return;
+      }
+
+      let cropId = seedForm.crop_id;
+
+      // If adding new crop, create it first
+      if (seedForm.crop_id === 'new') {
+        if (!seedForm.new_crop_name) {
+          alert('Please enter a crop name');
+          setSubmitting(false);
+          return;
+        }
+
+        const cropRes = await fetch('/api/crops', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name_en: seedForm.new_crop_name,
+            name_de: seedForm.new_crop_name,
+            status: 'active'
+          })
+        });
+        const cropJson = await cropRes.json();
+        if (!cropJson.success) {
+          alert(`Failed to create crop: ${cropJson.error}`);
+          setSubmitting(false);
+          return;
+        }
+        cropId = cropJson.data.id;
+      } else if (!seedForm.crop_id) {
+        alert('Please select or create a crop');
         setSubmitting(false);
         return;
       }
@@ -103,12 +136,17 @@ export default function InventoryPage() {
       const res = await fetch('/api/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(seedForm)
+        body: JSON.stringify({
+          crop_id: cropId,
+          quantity_grams: seedForm.quantity_grams,
+          seeds_per_tray: seedForm.seeds_per_tray,
+          reorder_threshold_trays: seedForm.reorder_threshold_trays
+        })
       });
       const json = await res.json();
       if (json.success) {
         setShowAddSeed(false);
-        setSeedForm({ crop_id: '', quantity_grams: '', seeds_per_tray: '', reorder_threshold_trays: '20' });
+        setSeedForm({ crop_id: '', new_crop_name: '', quantity_grams: '', seeds_per_tray: '', reorder_threshold_trays: '20' });
         fetchInventory();
       } else {
         alert(`Error: ${json.error}`);
@@ -588,15 +626,37 @@ export default function InventoryPage() {
             <form onSubmit={handleAddSeed} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Crop *</label>
-                <select
-                  required
-                  value={seedForm.crop_id}
-                  onChange={e => setSeedForm({ ...seedForm, crop_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                >
-                  <option value="">Select Crop...</option>
-                  {crops.map(c => <option key={c.id} value={c.id}>{c.name_en}</option>)}
-                </select>
+                {seedForm.crop_id === 'new' ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={seedForm.new_crop_name || ''}
+                      onChange={e => setSeedForm({ ...seedForm, new_crop_name: e.target.value })}
+                      placeholder="e.g. Basil, Microgreens"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSeedForm({ ...seedForm, crop_id: '', new_crop_name: '' })}
+                      className="text-xs text-gray-500 hover:text-gray-700 font-semibold"
+                    >
+                      ← Back to list
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={seedForm.crop_id}
+                    onChange={e => setSeedForm({ ...seedForm, crop_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                  >
+                    <option value="">Select Crop...</option>
+                    {crops
+                      .filter(c => !seeds.some(s => s.crop_id === c.id))
+                      .map(c => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+                    <option value="new" className="font-semibold text-green-600">+ Add New Variety</option>
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Current Stock (grams) *</label>
