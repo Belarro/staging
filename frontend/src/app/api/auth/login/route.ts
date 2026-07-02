@@ -17,9 +17,10 @@ export async function POST(request: NextRequest) {
     // Check if user exists in admin_users table
     let users;
     try {
-      users = await fetchFromSupabase(
-        `/admin_users?email=eq.${encodeURIComponent(email)}&select=id,email,password_hash`
-      );
+      const query = `/admin_users?email=eq.${encodeURIComponent(email)}&select=id,email,password_hash`;
+      console.log('Login query:', query, 'for email:', email);
+      users = await fetchFromSupabase(query);
+      console.log('Supabase response:', JSON.stringify(users));
     } catch (err) {
       console.error('Supabase query error:', err);
       return NextResponse.json(
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!Array.isArray(users) || users.length === 0) {
-      console.error('User not found:', email, 'Response:', users);
+      console.error('User not found. Email:', email, 'Response type:', typeof users, 'Is array:', Array.isArray(users), 'Length:', users?.length, 'Full response:', users);
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },
         { status: 401 }
