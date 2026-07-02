@@ -15,11 +15,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user exists in admin_users table
-    const users = await fetchFromSupabase(
-      `/admin_users?email=eq.${encodeURIComponent(email)}&select=id,email,password_hash`
-    );
+    let users;
+    try {
+      users = await fetchFromSupabase(
+        `/admin_users?email=eq.${encodeURIComponent(email)}&select=id,email,password_hash`
+      );
+    } catch (err) {
+      console.error('Supabase query error:', err);
+      return NextResponse.json(
+        { success: false, error: 'Database error' },
+        { status: 500 }
+      );
+    }
 
     if (!Array.isArray(users) || users.length === 0) {
+      console.error('User not found:', email, 'Response:', users);
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },
         { status: 401 }
