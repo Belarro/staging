@@ -171,11 +171,14 @@ export async function GET(request: NextRequest) {
 
       const seedDate = plan.seed_date;
 
-      // 1. Soak (day before seeding, if needed)
+      // 1. Soak — 12h+ soaks start the day before seeding; short soaks (3-6h)
+      // happen the same morning as seeding.
       if (proc.soak_enabled && proc.soak_hours) {
-        const soakDaysBefore = Math.ceil(proc.soak_hours / 24);
         const soakDate = new Date(seedDate);
-        soakDate.setDate(soakDate.getDate() - soakDaysBefore);
+        if (proc.soak_hours >= 12) {
+          soakDate.setDate(soakDate.getDate() - 1);
+        }
+        const sameDay = proc.soak_hours < 12;
         const soakKey = ymd(soakDate);
         if (!dailyOpsMap.has(soakKey)) dailyOpsMap.set(soakKey, []);
         dailyOpsMap.get(soakKey)!.push({
@@ -184,20 +187,24 @@ export async function GET(request: NextRequest) {
           grams_needed: plan.grams_needed,
           trays_needed: plan.trays_needed,
           task_type: 'soak',
-          notes: `Soak ${proc.soak_hours}h${proc.soak_notes ? ' - ' + proc.soak_notes : ''}`,
+          notes: `Soak ${proc.soak_hours}h${sameDay ? ' (same day, before seeding)' : ' (for tomorrow\'s seeding)'}${proc.soak_notes ? ' - ' + proc.soak_notes : ''}`,
         });
       }
 
-      // 2. Seed + Stack (same day)
+      // 2. Seed day: seed + cover soil + stack all happen together
       const seedKey = ymd(seedDate);
       if (!dailyOpsMap.has(seedKey)) dailyOpsMap.set(seedKey, []);
 
-      let seedStackNote = 'Seed';
-      if (proc.stack_enabled && proc.stack_days) {
-        seedStackNote += ` & Stack (${proc.stack_days}d)`;
-      }
+      let seedNote = 'Seed';
       if (proc.cover_soil_enabled) {
-        seedStackNote += ` + Cover soil${proc.cover_soil_notes ? ' (' + proc.cover_soil_notes + ')' : ''}`;
+        seedNote += ' + Cover with soil' + (proc.cover_soil_notes ? ` (${proc.cover_soil_notes})` : '');
+      }
+      if (proc.stack_enabled && proc.stack_days) {
+        seedNote += ` → Stack (${proc.stack_days}d)`;
+      } else if (proc.blackout_enabled && proc.blackout_days && !proc.stack_enabled) {
+        seedNote += ` → straight to blackout`;
+      } else if (!proc.stack_enabled && !proc.blackout_enabled) {
+        seedNote += ` → straight to light`;
       }
 
       dailyOpsMap.get(seedKey)!.push({
@@ -206,62 +213,74 @@ export async function GET(request: NextRequest) {
         grams_needed: plan.grams_needed,
         trays_needed: plan.trays_needed,
         task_type: 'seed_stack',
-        notes: seedStackNote,
+        notes: seedNote,
       });
 
-      // 3. Cover soil (only if NOT combined with seed/stack)
-      if (proc.cover_soil_enabled && !proc.stack_enabled) {
-        if (!dailyOpsMap.has(seedKey)) dailyOpsMap.set(seedKey, []);
-        dailyOpsMap.get(seedKey)!.push({
-          crop_name: plan.crop_name,
-          crop_id: plan.crop_id,
-          grams_needed: plan.grams_needed,
-          trays_needed: plan.trays_needed,
-          task_type: 'cover_soil',
-          notes: proc.cover_soil_notes ? proc.cover_soil_notes : 'Cover with soil',
-        });
-      }
-
-      // 4. Blackout period (starts after stack days) - show only START transition
+      // 3. Blackout start (after stack, or right after seeding if no stack).
+      // Only shown if there's a transition to make (skip if it starts on seed day —
+      // that's already in the seed note).
       if (proc.blackout_enabled && proc.blackout_days) {
         const blackoutStart = new Date(seedDate);
         blackoutStart.setDate(blackoutStart.getDate() + (proc.stack_days || 0));
         const blackoutKey = ymd(blackoutStart);
-        if (!dailyOpsMap.has(blackoutKey)) dailyOpsMap.set(blackoutKey, []);
-        dailyOpsMap.get(blackoutKey)!.push({
-          crop_name: plan.crop_name,
-          crop_id: plan.crop_id,
-          grams_needed: plan.grams_needed,
-          trays_needed: plan.trays_needed,
-          task_type: 'blackout',
-          notes: `Move to blackout (${proc.blackout_days}d)${proc.blackout_notes ? ' - ' + proc.blackout_notes : ''}`,
-        });
+        if (blackoutKey !== seedKey) {
+          if (!dailyOpsMap.has(blackoutKey)) dailyOpsMap.set(blackoutKey, []);
+          dailyOpsMap.get(blackoutKey)!.push({
+            crop_name: plan.crop_name,
+            crop_id: plan.crop_id,
+            grams_needed: plan.grams_needed,
+            trays_needed: plan.trays_needed,
+            task_type: 'blackout',
+            notes: `Move to blackout (${proc.blackout_days}d)${proc.blackout_notes ? ' - ' + proc.blackout_notes : ''}`,
+          });
+        }
       }
 
-      // 5. Light period (starts after stack + blackout) - show only START transition
+      // 4. Light start (after stack + blackout). Some crops (e.g. popcorn) never
+      // go to light — light_days empty means it stays dark until harvest.
       if (proc.light_enabled && proc.light_days) {
         const lightStart = new Date(seedDate);
         lightStart.setDate(lightStart.getDate() + (proc.stack_days || 0) + (proc.blackout_days || 0));
         const lightKey = ymd(lightStart);
-        if (!dailyOpsMap.has(lightKey)) dailyOpsMap.set(lightKey, []);
 
-        // Build light task note
+        const hasDome = proc.humidity_dome_enabled && proc.humidity_dome_days;
         let lightNote = `Move to light (${proc.light_days}d)`;
-        if (proc.humidity_dome_enabled && proc.humidity_dome_days) {
-          lightNote += ` + Humidity dome (${proc.humidity_dome_days}d)`;
+        if (hasDome) {
+          lightNote += ` + put humidity dome (${proc.humidity_dome_days}d)`;
         }
         if (proc.light_notes) {
           lightNote += ` - ${proc.light_notes}`;
         }
 
-        dailyOpsMap.get(lightKey)!.push({
-          crop_name: plan.crop_name,
-          crop_id: plan.crop_id,
-          grams_needed: plan.grams_needed,
-          trays_needed: plan.trays_needed,
-          task_type: 'light',
-          notes: lightNote,
-        });
+        // Skip transition card if light starts on seed day (already in seed note),
+        // but still show it if there's a dome to put on.
+        if (lightKey !== seedKey || hasDome) {
+          if (!dailyOpsMap.has(lightKey)) dailyOpsMap.set(lightKey, []);
+          dailyOpsMap.get(lightKey)!.push({
+            crop_name: plan.crop_name,
+            crop_id: plan.crop_id,
+            grams_needed: plan.grams_needed,
+            trays_needed: plan.trays_needed,
+            task_type: 'light',
+            notes: lightKey === seedKey ? `On light with humidity dome (${proc.humidity_dome_days}d)` : lightNote,
+          });
+        }
+
+        // 4b. Remove humidity dome — a real daily action, easy to forget.
+        if (hasDome && proc.humidity_dome_days! < proc.light_days) {
+          const domeOff = new Date(lightStart);
+          domeOff.setDate(domeOff.getDate() + proc.humidity_dome_days!);
+          const domeOffKey = ymd(domeOff);
+          if (!dailyOpsMap.has(domeOffKey)) dailyOpsMap.set(domeOffKey, []);
+          dailyOpsMap.get(domeOffKey)!.push({
+            crop_name: plan.crop_name,
+            crop_id: plan.crop_id,
+            grams_needed: plan.grams_needed,
+            trays_needed: plan.trays_needed,
+            task_type: 'light',
+            notes: 'Remove humidity dome',
+          });
+        }
       }
 
       // 6. Harvest (on next Tuesday after all growing days)

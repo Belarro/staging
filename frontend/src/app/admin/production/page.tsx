@@ -457,8 +457,8 @@ export default function ProductionPage() {
                       className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === '4weeks' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                       4 Weeks
                     </button>
-                    <button onClick={() => { setOpsView('daily'); setSelectedDay(data?.today || null); }}
-                      className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === 'daily' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <button onClick={() => { setOpsView('daily'); setSelectedDay(dailyOps[0]?.date || null); }}
+                      className="px-4 py-1.5 text-sm font-semibold rounded-md transition text-gray-500 hover:text-gray-700">
                       Daily
                     </button>
                   </div>
