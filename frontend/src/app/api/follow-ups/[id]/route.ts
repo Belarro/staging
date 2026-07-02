@@ -34,12 +34,24 @@ export async function DELETE(_request: NextRequest, props: Params) {
     const current = await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${id}&select=location_id`);
     const locationId = current?.[0]?.location_id;
 
-    // Delete all follow-ups for this location
+    // SOFT delete only (data protection rule — never hard-delete leads).
+    // Skipped follow-ups and archived locations are filtered out of every
+    // list, but the data stays recoverable.
+    const now = new Date().toISOString();
     if (locationId) {
-      await fetchFromSupabase(`/belarro_v4_follow_up?location_id=eq.${locationId}`, { method: 'DELETE' });
-      await fetchFromSupabase(`/locations?id=eq.${locationId}`, { method: 'DELETE' });
+      await fetchFromSupabase(`/belarro_v4_follow_up?location_id=eq.${locationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'skipped', updated_at: now }),
+      });
+      await fetchFromSupabase(`/locations?id=eq.${locationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ archived: 'YES' }),
+      });
     } else {
-      await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${id}`, { method: 'DELETE' });
+      await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'skipped', updated_at: now }),
+      });
     }
 
     return NextResponse.json({ success: true });
@@ -93,11 +105,22 @@ export async function PUT(request: NextRequest, props: Params) {
 
         if (next && next.length > 0) {
           const n = next[0];
-          // Determine flow from existing follow_up_days pattern
-          const gaps = n.follow_up_days <= 14 && nextStage <= 4
-            ? REENGAGE_GAPS
-            : NEW_LEAD_GAPS;
-          const daysToAdd = gaps[nextStage] ?? n.follow_up_days ?? 2;
+          // Flow is determined by how many stages were seeded for this
+          // location: new-lead flow has 5, re-engage has 4. (The old
+          // follow_up_days heuristic misclassified new leads as re-engage
+          // and pushed stage 2 out +5 days instead of +2.)
+          const allStages = await fetchFromSupabase(
+            `/belarro_v4_follow_up?location_id=eq.${cur.location_id}&select=stage`
+          );
+          const maxStage = Math.max(0, ...(allStages || []).map((r: any) => r.stage || 0));
+          const gaps = maxStage >= 5 ? NEW_LEAD_GAPS : REENGAGE_GAPS;
+          // Gap values are cumulative days from the visit, so the next stage
+          // comes (gap[next] - gap[current]) days after this send.
+          const curStage = cur.stage || cur.follow_up_number || 1;
+          const daysToAdd = Math.max(
+            (gaps[nextStage] ?? n.follow_up_days ?? 2) - (gaps[curStage] ?? 0),
+            1
+          );
           const newDueDate = addBusinessDays(now, daysToAdd);
 
           await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${n.id}`, {

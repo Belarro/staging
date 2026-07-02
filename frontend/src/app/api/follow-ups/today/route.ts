@@ -1,48 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-// import removed
+
+// Dashboard widget: follow-ups actually due today (or overdue).
+// Mirrors the follow-ups page logic — only the NEXT pending stage per
+// location, excluding archived locations and active/snoozed pipeline —
+// otherwise the widget counts every future stage of every lead and shows
+// hundreds of "due" items with unresolvable customer names.
 
 export async function GET(_request: NextRequest) {
   try {
-    // const auth = await requireAuth();
-    // if (!auth.ok) return auth.response;
-
-    // End of "today" in UTC. Due = due_date <= end of today AND status pending.
-    // This intentionally includes overdue items so nothing slips through.
     const now = new Date();
     const endOfToday = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999)
+      now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999
     ).toISOString();
-
-    const path =
-      `/belarro_v4_follow_up` +
-      `?status=eq.pending` +
-      `&due_date=lte.${endOfToday}` +
-      `&select=*` +
-      `&order=due_date.asc`;
-
-    const followups = (await fetchFromSupabase(path)) || [];
-
-    // Hydrate with customer details (one extra read, small table).
-    const customers =
-      (await fetchFromSupabase(
-        '/belarro_v4_customer?select=id,name,restaurant_name,contact_person,phone,whatsapp,email'
-      )) || [];
-    const custMap = new Map<string, any>(customers.map((c: any) => [c.id, c]));
-
     const startOfTodayMs = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)
+      now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0
     ).getTime();
 
-    const data = followups.map((f: any) => {
-      const customer = custMap.get(f.customer_id) || { name: 'Unknown Customer' };
-      const due = new Date(f.due_date);
-      return {
-        ...f,
-        customer,
-        is_overdue: due.getTime() < startOfTodayMs,
-      };
-    });
+    const followups = (await fetchFromSupabase(
+      `/belarro_v4_follow_up?status=eq.pending&location_id=not.is.null&select=*&order=due_date.asc`
+    )) || [];
+    if (followups.length === 0) {
+      return NextResponse.json({ success: true, data: [], count: 0 });
+    }
+
+    const locationIds = [...new Set(followups.map((f: any) => f.location_id))];
+    const idFilter = locationIds.map((id: any) => `id.eq.${id}`).join(',');
+    const locations = (await fetchFromSupabase(
+      `/locations?or=(${idFilter})&archived=neq.YES&select=id,location_name,contact_person,direct_phone,business_phone,direct_email,business_email,pipeline_stage`
+    )) || [];
+    const locMap = new Map<string, any>(locations.map((l: any) => [l.id, l]));
+
+    // Only the next (lowest-stage) pending follow-up per location
+    const nextPerLocation = new Map<string, any>();
+    for (const f of followups) {
+      const loc = locMap.get(f.location_id);
+      if (!loc) continue;
+      if (loc.pipeline_stage === 'active' || loc.pipeline_stage === 'snoozed') continue;
+      const stage = f.stage || f.follow_up_number || 1;
+      const existing = nextPerLocation.get(f.location_id);
+      if (!existing || stage < (existing.stage || existing.follow_up_number || 1)) {
+        nextPerLocation.set(f.location_id, { ...f, stage });
+      }
+    }
+
+    const data = Array.from(nextPerLocation.values())
+      .filter((f: any) => f.due_date <= endOfToday)
+      .map((f: any) => {
+        const loc = locMap.get(f.location_id);
+        const phone = loc.direct_phone || loc.business_phone || null;
+        return {
+          ...f,
+          customer: {
+            id: loc.id,
+            name: loc.location_name,
+            restaurant_name: loc.location_name,
+            contact_person: loc.contact_person || null,
+            phone,
+            whatsapp: phone ? phone.replace(/\D/g, '') : null,
+            email: loc.direct_email || loc.business_email || null,
+          },
+          is_overdue: new Date(f.due_date).getTime() < startOfTodayMs,
+        };
+      })
+      .sort((a: any, b: any) => a.due_date.localeCompare(b.due_date));
 
     return NextResponse.json({ success: true, data, count: data.length });
   } catch (error) {

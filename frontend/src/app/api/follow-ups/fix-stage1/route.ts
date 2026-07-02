@@ -37,7 +37,7 @@ export async function POST() {
       });
     }
 
-    return NextResponse.json({ success: true, fixed: stuckRows.length });
+    return NextResponse.json({ success: true, fixed: allRows.length });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },

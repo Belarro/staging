@@ -977,9 +977,9 @@ export default function FollowUpsPage() {
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-bold text-red-600 mb-2">Delete this lead?</h2>
+            <h2 className="text-lg font-bold text-red-600 mb-2">Remove this lead?</h2>
             <p className="text-sm text-gray-600 mb-6">
-              Permanently deletes <strong>{deleteTarget.location.name}</strong> and all follow-up records. Cannot be undone.
+              Archives <strong>{deleteTarget.location.name}</strong> and skips all its follow-ups. It disappears from every list but stays recoverable in the database.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteTarget(null)}
