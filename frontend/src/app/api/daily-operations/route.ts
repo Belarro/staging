@@ -31,7 +31,7 @@ interface DailyTask {
   crop_id: string;
   grams_needed: number;
   trays_needed: number;
-  task_type: 'soak' | 'seed' | 'stack' | 'blackout' | 'light' | 'humidity_dome' | 'harvest';
+  task_type: 'soak' | 'seed_stack' | 'blackout' | 'light' | 'harvest';
   notes?: string;
 }
 
@@ -40,6 +40,15 @@ interface DailyOperation {
   display: string;
   day_of_week: string;
   tasks: DailyTask[];
+}
+
+interface SeedingPlan {
+  seed_date: Date;
+  crop_id: string;
+  crop_name: string;
+  grams_needed: number;
+  trays_needed: number;
+  procedure: any;
 }
 
 export async function GET(request: NextRequest) {
@@ -72,16 +81,6 @@ export async function GET(request: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const thisWeekNum = isoWeek(today);
-
-    // Calculate what we need to seed in the next 4 weeks
-    interface SeedingPlan {
-      seed_date: Date;
-      crop_id: string;
-      crop_name: string;
-      grams_needed: number;
-      trays_needed: number;
-      procedure: any;
-    }
 
     const seedingPlans: SeedingPlan[] = [];
 
@@ -163,19 +162,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build daily operations calendar by calculating backwards from seeding dates
+    // Build daily operations calendar
     const dailyOpsMap = new Map<string, DailyTask[]>();
 
     for (const plan of seedingPlans) {
       const proc = plan.procedure;
-      const seedDate = plan.seed_date;
-      let currentDate = new Date(seedDate);
+      if (!proc) continue;
 
-      // Work backwards from seed date
-      // Soak comes first (before seed)
-      if (proc?.soak_enabled && proc?.soak_hours) {
+      const seedDate = plan.seed_date;
+
+      // 1. Soak (day before seeding, if needed)
+      if (proc.soak_enabled && proc.soak_hours) {
+        const soakDaysBefore = Math.ceil(proc.soak_hours / 24);
         const soakDate = new Date(seedDate);
-        soakDate.setDate(soakDate.getDate() - Math.ceil(proc.soak_hours / 24));
+        soakDate.setDate(soakDate.getDate() - soakDaysBefore);
         const soakKey = ymd(soakDate);
         if (!dailyOpsMap.has(soakKey)) dailyOpsMap.set(soakKey, []);
         dailyOpsMap.get(soakKey)!.push({
@@ -184,46 +184,27 @@ export async function GET(request: NextRequest) {
           grams_needed: plan.grams_needed,
           trays_needed: plan.trays_needed,
           task_type: 'soak',
-          notes: `Soak for ${proc.soak_hours} hours${proc.soak_notes ? ' (' + proc.soak_notes + ')' : ''}`,
+          notes: `Soak for ${proc.soak_hours}h${proc.soak_notes ? ' (' + proc.soak_notes + ')' : ''}`,
         });
       }
 
-      // Seeding on seed date
+      // 2. Seed + Stack (same day)
       const seedKey = ymd(seedDate);
       if (!dailyOpsMap.has(seedKey)) dailyOpsMap.set(seedKey, []);
+      const stackNote = proc.stack_enabled ? `Seed & Stack (${proc.stack_days}d)` : 'Seed';
       dailyOpsMap.get(seedKey)!.push({
         crop_name: plan.crop_name,
         crop_id: plan.crop_id,
         grams_needed: plan.grams_needed,
         trays_needed: plan.trays_needed,
-        task_type: 'seed',
-        notes: proc?.soak_enabled ? 'Seed (after soaking)' : 'Seed',
+        task_type: 'seed_stack',
+        notes: proc.cover_soil_enabled ? `${stackNote}${proc.cover_soil_notes ? ', ' + proc.cover_soil_notes : ''}` : stackNote,
       });
 
-      // Stacking (after seeding)
-      if (proc?.stack_enabled && proc?.stack_days) {
-        const stackStart = new Date(seedDate);
-        stackStart.setDate(stackStart.getDate() + 1);
-        for (let i = 0; i < proc.stack_days; i++) {
-          const stackDate = new Date(stackStart);
-          stackDate.setDate(stackDate.getDate() + i);
-          const stackKey = ymd(stackDate);
-          if (!dailyOpsMap.has(stackKey)) dailyOpsMap.set(stackKey, []);
-          dailyOpsMap.get(stackKey)!.push({
-            crop_name: plan.crop_name,
-            crop_id: plan.crop_id,
-            grams_needed: plan.grams_needed,
-            trays_needed: plan.trays_needed,
-            task_type: 'stack',
-            notes: `Stack (Day ${i + 1}/${proc.stack_days})`,
-          });
-        }
-      }
-
-      // Blackout period (after stacking)
-      if (proc?.blackout_enabled && proc?.blackout_days) {
-        let blackoutStart = new Date(seedDate);
-        blackoutStart.setDate(blackoutStart.getDate() + 1 + (proc.stack_days || 0));
+      // 3. Blackout period (starts after stack days)
+      if (proc.blackout_enabled && proc.blackout_days) {
+        const blackoutStart = new Date(seedDate);
+        blackoutStart.setDate(blackoutStart.getDate() + (proc.stack_days || 0));
         for (let i = 0; i < proc.blackout_days; i++) {
           const blackoutDate = new Date(blackoutStart);
           blackoutDate.setDate(blackoutDate.getDate() + i);
@@ -235,61 +216,44 @@ export async function GET(request: NextRequest) {
             grams_needed: plan.grams_needed,
             trays_needed: plan.trays_needed,
             task_type: 'blackout',
-            notes: `Blackout (Day ${i + 1}/${proc.blackout_days})`,
+            notes: `Blackout (${i + 1}/${proc.blackout_days})${proc.blackout_notes ? ' - ' + proc.blackout_notes : ''}`,
           });
         }
       }
 
-      // Light period (after blackout)
-      if (proc?.light_enabled && proc?.light_days) {
-        let lightStart = new Date(seedDate);
-        lightStart.setDate(
-          lightStart.getDate() +
-            1 +
-            (proc.stack_days || 0) +
-            (proc.blackout_days || 0)
-        );
+      // 4. Light period (starts after stack + blackout)
+      if (proc.light_enabled && proc.light_days) {
+        const lightStart = new Date(seedDate);
+        lightStart.setDate(lightStart.getDate() + (proc.stack_days || 0) + (proc.blackout_days || 0));
+
         for (let i = 0; i < proc.light_days; i++) {
           const lightDate = new Date(lightStart);
           lightDate.setDate(lightDate.getDate() + i);
           const lightKey = ymd(lightDate);
           if (!dailyOpsMap.has(lightKey)) dailyOpsMap.set(lightKey, []);
+
+          // Check if humidity dome applies on this light day
+          const hasDome = proc.humidity_dome_enabled &&
+            proc.humidity_dome_days &&
+            i < proc.humidity_dome_days;
+
+          const notes = hasDome
+            ? `Light + Humidity dome (${i + 1}/${proc.light_days})${proc.humidity_dome_notes ? ' - ' + proc.humidity_dome_notes : ''}`
+            : `Light (${i + 1}/${proc.light_days})${proc.light_notes ? ' - ' + proc.light_notes : ''}`;
+
           dailyOpsMap.get(lightKey)!.push({
             crop_name: plan.crop_name,
             crop_id: plan.crop_id,
             grams_needed: plan.grams_needed,
             trays_needed: plan.trays_needed,
             task_type: 'light',
-            notes: `Under lights (Day ${i + 1}/${proc.light_days})`,
+            notes,
           });
         }
       }
 
-      // Humidity dome (can overlap with other phases, but typically during early growth)
-      if (proc?.humidity_dome_enabled && proc?.humidity_dome_days) {
-        const domeStart = new Date(seedDate);
-        domeStart.setDate(domeStart.getDate() + 1);
-        for (let i = 0; i < proc.humidity_dome_days; i++) {
-          const domeDate = new Date(domeStart);
-          domeDate.setDate(domeDate.getDate() + i);
-          const domeKey = ymd(domeDate);
-          if (!dailyOpsMap.has(domeKey)) dailyOpsMap.set(domeKey, []);
-          dailyOpsMap.get(domeKey)!.push({
-            crop_name: plan.crop_name,
-            crop_id: plan.crop_id,
-            grams_needed: plan.grams_needed,
-            trays_needed: plan.trays_needed,
-            task_type: 'humidity_dome',
-            notes: `Humidity dome (Day ${i + 1}/${proc.humidity_dome_days})`,
-          });
-        }
-      }
-
-      // Harvest (on Tuesday after growing period)
-      const totalGrowDays =
-        (proc?.stack_days || 0) +
-        (proc?.blackout_days || 0) +
-        (proc?.light_days || 0);
+      // 5. Harvest (on next Tuesday after all growing days)
+      const totalGrowDays = (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0);
       const harvestRaw = new Date(seedDate);
       harvestRaw.setDate(harvestRaw.getDate() + totalGrowDays);
       const harvestTuesday = nextTuesdayOnOrAfter(harvestRaw);
@@ -315,15 +279,12 @@ export async function GET(request: NextRequest) {
           display: fmt(date),
           day_of_week: date.toLocaleDateString('en-DE', { weekday: 'long' }),
           tasks: tasks.sort((a, b) => {
-            // Sort by task type priority
             const priority: Record<string, number> = {
               'soak': 1,
-              'seed': 2,
-              'stack': 3,
-              'humidity_dome': 4,
-              'blackout': 5,
-              'light': 6,
-              'harvest': 7,
+              'seed_stack': 2,
+              'blackout': 3,
+              'light': 4,
+              'harvest': 5,
             };
             return (priority[a.task_type] || 99) - (priority[b.task_type] || 99);
           }),

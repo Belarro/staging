@@ -47,7 +47,7 @@ interface DailyTask {
   crop_id: string;
   grams_needed: number;
   trays_needed: number;
-  task_type: 'soak' | 'seed' | 'stack' | 'blackout' | 'light' | 'humidity_dome' | 'harvest';
+  task_type: 'soak' | 'seed_stack' | 'blackout' | 'light' | 'harvest';
   notes?: string;
 }
 
@@ -447,20 +447,19 @@ export default function ProductionPage() {
                         {day.tasks.map((task, idx) => {
                           const taskColors: Record<string, string> = {
                             'soak': 'bg-blue-50 text-blue-700 border-blue-100',
-                            'seed': 'bg-green-50 text-green-700 border-green-100',
-                            'stack': 'bg-orange-50 text-orange-700 border-orange-100',
+                            'seed_stack': 'bg-green-50 text-green-700 border-green-100',
                             'blackout': 'bg-gray-50 text-gray-700 border-gray-100',
                             'light': 'bg-yellow-50 text-yellow-700 border-yellow-100',
-                            'humidity_dome': 'bg-cyan-50 text-cyan-700 border-cyan-100',
                             'harvest': 'bg-amber-50 text-amber-700 border-amber-100',
                           };
                           const color = taskColors[task.task_type] || 'bg-gray-50 text-gray-700 border-gray-100';
+                          const taskLabel = task.task_type === 'seed_stack' ? 'Seed & Stack' : task.task_type.charAt(0).toUpperCase() + task.task_type.slice(1);
                           return (
                             <div key={idx} className="px-5 py-4 flex items-start justify-between hover:bg-gray-50 transition">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3">
-                                  <span className={`px-2 py-1 text-xs font-bold rounded border ${color}`}>
-                                    {task.task_type.replace('_', ' ')}
+                                  <span className={`px-2 py-1 text-xs font-bold rounded border ${color} whitespace-nowrap`}>
+                                    {taskLabel}
                                   </span>
                                   <span className="font-semibold text-gray-900">{task.crop_name}</span>
                                 </div>
