@@ -2,16 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
 import bcrypt from 'bcrypt';
 
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16);
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
@@ -46,19 +36,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create session token (simple UUID-like string)
-    const sessionToken = `session_${Date.now()}_${simpleHash(email)}`;
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    // Store session in database
-    await fetchFromSupabase('/admin_sessions', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: user.id,
-        token_hash: simpleHash(sessionToken),
-        expires_at: expiresAt,
-      }),
-    });
+    // Create simple session token
+    const sessionToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     const response = NextResponse.json({ success: true, user: { email } });
 
