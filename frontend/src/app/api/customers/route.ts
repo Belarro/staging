@@ -84,8 +84,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // const auth = await requireAuth();
-    // if (!auth.ok) return auth.response;
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
     const body = await request.json();
     const {
       name,
