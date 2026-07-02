@@ -178,10 +178,14 @@ export default function FollowUpsPage() {
   const dueDateStr = (f: FollowUp) => new Date(f.due_date).toLocaleDateString('sv');
 
   const pending = followups.filter(f => f.status === 'pending');
-  // Today: most recently added (latest due_date = latest visit) on top
+  // Today: most recently visited on top (sort by sent_date if available, else due_date)
   const today = pending
     .filter(f => dueDateStr(f) <= todayStr)
-    .sort((a, b) => new Date(b.due_date).getTime() - new Date(a.due_date).getTime());
+    .sort((a, b) => {
+      const dateA = (a.sent_date ? new Date(a.sent_date).getTime() : new Date(a.due_date).getTime());
+      const dateB = (b.sent_date ? new Date(b.sent_date).getTime() : new Date(b.due_date).getTime());
+      return dateB - dateA;
+    });
   // Upcoming: soonest due date first
   const upcoming = pending
     .filter(f => dueDateStr(f) > todayStr)
