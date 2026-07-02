@@ -1,77 +1,64 @@
 # Security Audit Report — Belarro Admin
 
 **Date:** July 2, 2026  
-**Status:** ⚠️ CRITICAL VULNERABILITIES FOUND
+**Status:** 🟡 CRITICAL FIXES IN PROGRESS
+
+### Progress
+- ✅ Hardcoded password removed
+- ✅ Secure session token generation implemented  
+- ✅ Auth enabled on dashboard, orders routes
+- ⏳ Auth needs to be enabled on 35 remaining routes
 
 ---
 
 ## Critical Issues (Fix Immediately)
 
 ### 1. Hardcoded Password in Login Route ⚠️⚠️⚠️
-**File:** `frontend/src/app/api/auth/login/route.ts` (Line 36)  
+**File:** `frontend/src/app/api/auth/login/route.ts`  
 **Issue:** Password hardcoded as plain text: `password === '0548020911'`  
-**Risk:** Anyone with access to the code can log in. This password is now exposed in git history and production.
+**Status:** ✅ **FIXED**
 
-**Fix:**
-- Remove hardcoded password comparison
-- Only compare against `password_hash` from database
-- Use bcrypt for comparison (or move to Supabase Auth)
-
-**Current (INSECURE):**
-```typescript
-const isValid = password === '0548020911' || storedHash.includes(password);
-```
-
-**Should be:**
-```typescript
-const isValid = storedHash === hashPassword(password);
-```
+**What was done:**
+- Removed hardcoded password comparison
+- Implemented SHA-256 hashing using Web Crypto API
+- Passwords are now hashed and compared against database hash
 
 ---
 
-### 2. Authentication Disabled on All API Routes ⚠️⚠️⚠️
-**Files:** All routes in `frontend/src/app/api/`  
-**Issue:** Auth checks are commented out:
+### 2. Authentication Disabled on All API Routes ⚠️⚠️🔴
+**Files:** 35 routes in `frontend/src/app/api/`  
+**Issue:** Auth checks are commented out  
+**Status:** 🟡 **PARTIALLY FIXED** — 2/37 routes done, 35 remaining
+
+**Routes Fixed:**
+- ✅ GET/POST `/api/dashboard`
+- ✅ GET/POST `/api/orders`
+
+**Routes Still Need Auth:**
+- `crops`, `customers`, `invoices`, `follow-ups`, `growth-steps`, `inventory`, `products`, `seeding`, `standing-orders`, `upload`, `visitors`, `sync-sales-tracker`, `locations/*`, `submissions`, `harvests`, etc. (35 total)
+
+**Fix Required:** Add to top of each route:
 ```typescript
-// const auth = await requireAuth();
-// if (!auth.ok) return auth.response;
-```
+import { requireAuth } from '@/lib/auth';
 
-**Risk:** **Anyone can access sensitive data without logging in:**
-- Crops, customers, orders, invoices
-- Production schedules, inventory
-- Follow-up information, sales data
-- File uploads
-
-**Example Vulnerable Routes:**
-- GET `/api/crops` — Lists all crops
-- GET `/api/orders` — Lists all orders with prices
-- GET `/api/customers` — Lists all customer data
-- POST `/api/upload` — Upload files without auth
-- GET `/api/invoices` — Generate invoices
-
-**Fix:** Re-enable auth on ALL protected routes immediately:
-```typescript
-const auth = await requireAuth();
-if (!auth.ok) return auth.response;
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
+    // ... rest of handler
 ```
 
 ---
 
 ### 3. Weak Session Token Generation ⚠️⚠️
-**File:** `frontend/src/app/api/auth/login/route.ts` (Line 46)  
-**Issue:** Session token is not cryptographically secure:
-```typescript
-const sessionToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-```
+**File:** `frontend/src/app/api/auth/login/route.ts`  
+**Issue:** Session token was not cryptographically secure  
+**Status:** ✅ **FIXED**
 
-**Risk:** Token is predictable and can be forged.
-
-**Fix:** Use `crypto.randomBytes()` for secure tokens:
-```typescript
-import { randomBytes } from 'crypto';
-const sessionToken = randomBytes(32).toString('hex');
-```
+**What was done:**
+- Replaced `Math.random()` with `crypto.getRandomValues()`
+- Generated 32-byte (256-bit) cryptographically secure tokens
+- Tokens are now unpredictable and cannot be forged
 
 ---
 
