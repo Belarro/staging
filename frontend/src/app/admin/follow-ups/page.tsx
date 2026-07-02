@@ -10,6 +10,7 @@ interface FollowUp {
   flow: 'new' | 'reengage';
   total_stages: number;
   due_date: string;
+  visited_at: string | null;
   status: 'pending' | 'sent' | 'completed' | 'replied';
   sent_via: string | null;
   sent_date: string | null;
@@ -178,10 +179,14 @@ export default function FollowUpsPage() {
   const dueDateStr = (f: FollowUp) => new Date(f.due_date).toLocaleDateString('sv');
 
   const pending = followups.filter(f => f.status === 'pending');
-  // Today: oldest first (QA test at top)
+  // Today: most recently visited first
   const today = pending
     .filter(f => dueDateStr(f) <= todayStr)
-    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+    .sort((a, b) => {
+      const dateA = a.visited_at ? new Date(a.visited_at).getTime() : new Date(a.due_date).getTime();
+      const dateB = b.visited_at ? new Date(b.visited_at).getTime() : new Date(b.due_date).getTime();
+      return dateB - dateA;
+    });
   // Upcoming: soonest due date first
   const upcoming = pending
     .filter(f => dueDateStr(f) > todayStr)
