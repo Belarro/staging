@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
 
     const all = [...customerRows, ...locationRows];
 
-    return NextResponse.json({ success: true, data: all });
+    return NextResponse.json({ success: true, data: all, _test_marker: 'CLAUDE_TEST_12345_DEPLOYMENT_WORKING' });
   } catch (error) {
     console.error('Customers GET error:', error);
     return NextResponse.json(
