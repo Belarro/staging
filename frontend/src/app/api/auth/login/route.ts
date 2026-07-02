@@ -40,8 +40,7 @@ export async function POST(request: NextRequest) {
 
     // Hash the provided password and compare
     const passwordHash = await hashPassword(password);
-    // Accept either the new SHA-256 hash OR the known password (for transition)
-    const isValid = storedHash === passwordHash || password === '0548020911';
+    const isValid = storedHash === passwordHash;
 
     if (!isValid) {
       return NextResponse.json(
