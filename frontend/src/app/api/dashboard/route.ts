@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 import { fetchFromSupabase } from '@/lib/supabase';
-// import removed
 
 function isoWeek(d: Date): number {
   const tmp = new Date(d);
@@ -97,9 +97,8 @@ function parseWeightFromSize(sizeName: string, proc: any): number {
 
 export async function GET(request: NextRequest) {
   try {
-    // For now, skip auth check — rely on deployment being private
-    // TODO: restore session-based auth once cookie handling is fixed on Vercel
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
+    if (!auth.ok) return auth.response;
     // if (!auth.ok) return auth.response;
 
     const today = new Date();
