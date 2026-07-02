@@ -36,8 +36,19 @@ export async function GET(request: NextRequest) {
       created_at: c.created_at,
     }));
 
-    // Belarro customer IDs already in the system (to avoid duplication)
+    // Build lookup maps for deduplication by phone/email
     const belarroCustIds = new Set(customerRows.map((c: any) => c.id));
+    const belarroPhones = new Set(
+      customerRows
+        .map((c: any) => c.phone)
+        .filter((p: any) => p && p.trim())
+    );
+    const belarroEmails = new Set(
+      customerRows
+        .map((c: any) => c.email)
+        .filter((e: any) => e && e.trim().toLowerCase())
+        .map((e: any) => e.toLowerCase())
+    );
 
     // Normalize locations rows — map pipeline_stage to status
     const stageToStatus = (stage: string | null): string => {
@@ -48,7 +59,20 @@ export async function GET(request: NextRequest) {
     };
 
     const locationRows = (locations || [])
-      .filter((loc: any) => !belarroCustIds.has(loc.id)) // skip if already in belarro
+      .filter((loc: any) => {
+        // Skip if ID already exists
+        if (belarroCustIds.has(loc.id)) return false;
+
+        // Skip if phone matches
+        const locPhone = loc.direct_phone || loc.business_phone || '';
+        if (locPhone && belarroPhones.has(locPhone)) return false;
+
+        // Skip if email matches
+        const locEmail = (loc.direct_email || loc.business_email || '').toLowerCase();
+        if (locEmail && belarroEmails.has(locEmail)) return false;
+
+        return true;
+      })
       .map((loc: any) => ({
         id: loc.id,
         _source: 'saletracker',
