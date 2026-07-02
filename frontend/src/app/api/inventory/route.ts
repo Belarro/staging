@@ -85,17 +85,10 @@ export async function POST(request: NextRequest) {
 
     const existing = await fetchFromSupabase(`/belarro_v4_seed_inventory?crop_id=eq.${crop_id}&select=id`);
     if (existing && existing.length > 0) {
-      // Update existing record
-      const updated = await fetchFromSupabase(`/belarro_v4_seed_inventory?id=eq.${existing[0].id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          quantity_grams: parseFloat(quantity_grams),
-          seeds_per_tray: parseFloat(seeds_per_tray),
-          reorder_threshold_trays: parseInt(reorder_threshold_trays) || 20,
-          updated_at: new Date().toISOString()
-        })
-      });
-      return NextResponse.json({ success: true, data: updated?.[0], message: 'Seed stock updated' });
+      return NextResponse.json(
+        { success: false, error: 'This crop is already in your seed inventory. Use "+ Received" to add more seeds.' },
+        { status: 409 }
+      );
     }
 
     const newRecord = await fetchFromSupabase('/belarro_v4_seed_inventory', {
