@@ -37,9 +37,10 @@ function nextTuesdayOnOrAfter(from: Date): Date {
   return d;
 }
 
-// Format date as YYYY-MM-DD
+// Format date as YYYY-MM-DD using LOCAL time. toISOString would shift local
+// midnight to the previous day in UTC (Berlin is UTC+1/+2).
 function ymd(d: Date): string {
-  return d.toISOString().split('T')[0];
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // Format for display

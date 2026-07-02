@@ -87,6 +87,7 @@ export default function ProductionPage() {
 
   const [seedView, setSeedView] = useState<'week' | '4weeks'>('week');
   const [opsView, setOpsView] = useState<'week' | '2weeks' | '4weeks' | 'daily'>('week');
+  const [opsLayout, setOpsLayout] = useState<'list' | 'calendar'>('calendar');
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [harvestModal, setHarvestModal] = useState<ActiveBatch | null>(null);
   const [harvestForm, setHarvestForm] = useState({ actual_yield_grams: '', notes: '' });
@@ -167,6 +168,30 @@ export default function ProductionPage() {
     return dailyOps.filter(d => new Date(d.date) <= endDate);
   };
   const filteredOps = getFilteredOps();
+
+  // Calendar grid: weeks of 7 days (Mon-Sun) covering the selected range
+  const localKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const buildCalendarWeeks = () => {
+    const start = new Date(today);
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // back to Monday
+    const rangeDays = opsView === 'week' ? 7 : opsView === '2weeks' ? 14 : 28;
+    const end = new Date(today);
+    end.setDate(end.getDate() + rangeDays);
+    const opsByDate = new Map(dailyOps.map(d => [d.date, d]));
+    const weeks: { date: Date; key: string; ops?: DailyOperation }[][] = [];
+    const cur = new Date(start);
+    while (cur <= end) {
+      const week: { date: Date; key: string; ops?: DailyOperation }[] = [];
+      for (let i = 0; i < 7; i++) {
+        const key = localKey(cur);
+        week.push({ date: new Date(cur), key, ops: opsByDate.get(key) });
+        cur.setDate(cur.getDate() + 1);
+      }
+      weeks.push(week);
+    }
+    return weeks;
+  };
 
   return (
     <div className="space-y-6">
@@ -442,41 +467,55 @@ export default function ProductionPage() {
           {activeTab === 'daily-ops' && (
             <div className="space-y-4">
               {/* View toggle */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {opsView !== 'daily' && (
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                      <button onClick={() => setOpsView('week')}
+                        className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === 'week' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                        This Week
+                      </button>
+                      <button onClick={() => setOpsView('2weeks')}
+                        className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === '2weeks' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                        2 Weeks
+                      </button>
+                      <button onClick={() => setOpsView('4weeks')}
+                        className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === '4weeks' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                        4 Weeks
+                      </button>
+                      <button onClick={() => { setOpsView('daily'); setSelectedDay(dailyOps[0]?.date || null); }}
+                        className="px-4 py-1.5 text-sm font-semibold rounded-md transition text-gray-500 hover:text-gray-700">
+                        Daily
+                      </button>
+                    </div>
+                  )}
+                  {opsView === 'daily' && (
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setOpsView('week')}
+                        className="px-3 py-1.5 text-sm font-semibold rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition">
+                        ← Back
+                      </button>
+                      <select value={selectedDay || ''} onChange={(e) => setSelectedDay(e.target.value || null)}
+                        className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                        {dailyOps.map(day => (
+                          <option key={day.date} value={day.date}>
+                            {day.display} ({day.tasks.length} tasks)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
                 {opsView !== 'daily' && (
                   <div className="flex bg-gray-100 rounded-lg p-1">
-                    <button onClick={() => setOpsView('week')}
-                      className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === 'week' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                      This Week
+                    <button onClick={() => setOpsLayout('calendar')}
+                      className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsLayout === 'calendar' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      Calendar
                     </button>
-                    <button onClick={() => setOpsView('2weeks')}
-                      className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === '2weeks' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                      2 Weeks
+                    <button onClick={() => setOpsLayout('list')}
+                      className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsLayout === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      List
                     </button>
-                    <button onClick={() => setOpsView('4weeks')}
-                      className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === '4weeks' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                      4 Weeks
-                    </button>
-                    <button onClick={() => { setOpsView('daily'); setSelectedDay(dailyOps[0]?.date || null); }}
-                      className="px-4 py-1.5 text-sm font-semibold rounded-md transition text-gray-500 hover:text-gray-700">
-                      Daily
-                    </button>
-                  </div>
-                )}
-                {opsView === 'daily' && (
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setOpsView('week')}
-                      className="px-3 py-1.5 text-sm font-semibold rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition">
-                      ← Back
-                    </button>
-                    <select value={selectedDay || ''} onChange={(e) => setSelectedDay(e.target.value || null)}
-                      className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none">
-                      {dailyOps.map(day => (
-                        <option key={day.date} value={day.date}>
-                          {day.display} ({day.tasks.length} tasks)
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 )}
               </div>
@@ -526,13 +565,68 @@ export default function ProductionPage() {
                                 {task.notes && <p className="text-xs text-gray-500 mt-1 ml-0">{task.notes}</p>}
                               </div>
                               <div className="text-right ml-4">
-                                <div className="text-sm font-bold text-gray-900">{task.trays_needed} trays</div>
-                                <div className="text-xs text-gray-500">{task.grams_needed}g</div>
+                                <div className="text-sm font-bold text-gray-900">{task.trays_needed} {task.trays_needed === 1 ? 'tray' : 'trays'}</div>
                               </div>
                             </div>
                           );
                         })}
                       </div>
+                    </div>
+                  ))}
+                </div>
+              ) : opsLayout === 'calendar' ? (
+                /* Calendar grid: weeks as rows, Mon-Sun columns */
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                      <div key={d} className="px-2 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">{d}</div>
+                    ))}
+                  </div>
+                  {buildCalendarWeeks().map((week, wi) => (
+                    <div key={wi} className={`grid grid-cols-7 ${wi > 0 ? 'border-t border-gray-100' : ''}`}>
+                      {week.map(cell => {
+                        const isToday = cell.key === data?.today;
+                        const isPast = cell.date < today && !isToday;
+                        const chipColors: Record<string, string> = {
+                          'soak': 'bg-blue-100 text-blue-800',
+                          'seed_stack': 'bg-green-100 text-green-800',
+                          'cover_soil': 'bg-orange-100 text-orange-800',
+                          'blackout': 'bg-gray-200 text-gray-700',
+                          'light': 'bg-yellow-100 text-yellow-800',
+                          'harvest': 'bg-amber-100 text-amber-800',
+                        };
+                        const chipLabels: Record<string, string> = {
+                          'soak': 'Soak',
+                          'seed_stack': 'Seed',
+                          'cover_soil': 'Soil',
+                          'blackout': '→ Dark',
+                          'light': '→ Light',
+                          'harvest': 'Harvest',
+                        };
+                        return (
+                          <div key={cell.key}
+                            className={`min-h-[110px] px-1.5 py-1.5 border-r border-gray-100 last:border-r-0 ${isPast ? 'bg-gray-50/60' : ''} ${isToday ? 'bg-green-50/40' : ''}`}>
+                            <div className={`text-xs font-bold mb-1 ${isToday ? 'text-green-700' : isPast ? 'text-gray-300' : 'text-gray-500'}`}>
+                              {cell.date.getDate()}
+                              {isToday && <span className="ml-1 text-[9px] font-semibold uppercase">today</span>}
+                            </div>
+                            <div className="space-y-1">
+                              {(cell.ops?.tasks || []).map((task, ti) => {
+                                const isDomeOff = task.notes === 'Remove humidity dome';
+                                const label = isDomeOff ? 'Dome off' : (chipLabels[task.task_type] || task.task_type);
+                                return (
+                                  <button key={ti}
+                                    onClick={() => { setOpsView('daily'); setSelectedDay(cell.key); }}
+                                    title={`${task.crop_name}: ${task.notes || ''}`}
+                                    className={`w-full text-left px-1.5 py-0.5 rounded text-[10px] font-semibold leading-tight truncate block ${chipColors[task.task_type] || 'bg-gray-100 text-gray-700'} hover:opacity-75 transition`}>
+                                    {label} {task.crop_name}{task.trays_needed > 1 ? ` ×${task.trays_needed}` : ''}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
@@ -582,8 +676,7 @@ export default function ProductionPage() {
                                 {task.notes && <p className="text-xs text-gray-500 mt-1 ml-0">{task.notes}</p>}
                               </div>
                               <div className="text-right ml-4">
-                                <div className="text-sm font-bold text-gray-900">{task.trays_needed} trays</div>
-                                <div className="text-xs text-gray-500">{task.grams_needed}g</div>
+                                <div className="text-sm font-bold text-gray-900">{task.trays_needed} {task.trays_needed === 1 ? 'tray' : 'trays'}</div>
                               </div>
                             </div>
                           );

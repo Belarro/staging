@@ -18,8 +18,11 @@ function nextTuesdayOnOrAfter(from: Date): Date {
   return d;
 }
 
+// Local-timezone date key. Never use toISOString here: local midnight in
+// Berlin (UTC+2) converts to 22:00 the PREVIOUS day in UTC, shifting every
+// date in the calendar one day early.
 function ymd(d: Date): string {
-  return d.toISOString().split('T')[0];
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function fmt(d: Date): string {
@@ -311,7 +314,8 @@ export async function GET(request: NextRequest) {
     const dailyOperations: DailyOperation[] = Array.from(dailyOpsMap.entries())
       .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
       .map(([dateStr, tasks]) => {
-        const date = new Date(dateStr + 'T00:00:00Z');
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const date = new Date(y, m - 1, d); // parse as local, not UTC
         return {
           date: dateStr,
           display: fmt(date),
