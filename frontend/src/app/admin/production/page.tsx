@@ -86,6 +86,8 @@ export default function ProductionPage() {
   const [activeTab, setActiveTab] = useState<'seeding' | 'delivery' | 'growing' | 'harvest' | 'daily-ops'>('seeding');
 
   const [seedView, setSeedView] = useState<'week' | '4weeks'>('week');
+  const [opsView, setOpsView] = useState<'week' | '2weeks' | '4weeks' | 'daily'>('week');
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [harvestModal, setHarvestModal] = useState<ActiveBatch | null>(null);
   const [harvestForm, setHarvestForm] = useState({ actual_yield_grams: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -152,6 +154,19 @@ export default function ProductionPage() {
 
   // Group deliveries by harvest date
   const deliveries = data?.schedule || [];
+
+  // Filter daily ops by view
+  const today = data?.today ? new Date(data.today) : new Date();
+  const getFilteredOps = () => {
+    const endDate = new Date(today);
+    if (opsView === 'week') endDate.setDate(endDate.getDate() + 7);
+    else if (opsView === '2weeks') endDate.setDate(endDate.getDate() + 14);
+    else if (opsView === '4weeks') endDate.setDate(endDate.getDate() + 28);
+    else if (opsView === 'daily' && selectedDay) return dailyOps.filter(d => d.date === selectedDay);
+
+    return dailyOps.filter(d => new Date(d.date) <= endDate);
+  };
+  const filteredOps = getFilteredOps();
 
   return (
     <div className="space-y-6">
@@ -426,13 +441,105 @@ export default function ProductionPage() {
           {/* ── DAILY OPERATIONS TAB ── */}
           {activeTab === 'daily-ops' && (
             <div className="space-y-4">
-              {dailyOps.length === 0 ? (
+              {/* View toggle */}
+              <div className="flex items-center gap-2">
+                {opsView !== 'daily' && (
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button onClick={() => setOpsView('week')}
+                      className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === 'week' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      This Week
+                    </button>
+                    <button onClick={() => setOpsView('2weeks')}
+                      className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === '2weeks' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      2 Weeks
+                    </button>
+                    <button onClick={() => setOpsView('4weeks')}
+                      className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === '4weeks' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      4 Weeks
+                    </button>
+                    <button onClick={() => { setOpsView('daily'); setSelectedDay(data?.today || null); }}
+                      className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${opsView === 'daily' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      Daily
+                    </button>
+                  </div>
+                )}
+                {opsView === 'daily' && (
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setOpsView('week')}
+                      className="px-3 py-1.5 text-sm font-semibold rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition">
+                      ← Back
+                    </button>
+                    <select value={selectedDay || ''} onChange={(e) => setSelectedDay(e.target.value || null)}
+                      className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                      {dailyOps.map(day => (
+                        <option key={day.date} value={day.date}>
+                          {day.display} ({day.tasks.length} tasks)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {filteredOps.length === 0 ? (
                 <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-400 text-sm">
-                  No operations scheduled.
+                  No operations scheduled {opsView === 'daily' ? 'for this day' : 'in this period'}.
+                </div>
+              ) : opsView === 'daily' && selectedDay ? (
+                /* Daily view - show one day with all tasks stacked */
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  {filteredOps.map((day) => (
+                    <div key={day.date}>
+                      <div className="bg-gray-50 border-b border-gray-200 px-5 py-4">
+                        <div className="font-bold text-gray-900 text-lg">{day.display}</div>
+                        <div className="text-sm text-gray-500">{day.day_of_week}</div>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {day.tasks.map((task, idx) => {
+                          const taskColors: Record<string, string> = {
+                            'soak': 'bg-blue-50 text-blue-700 border-blue-100',
+                            'seed_stack': 'bg-green-50 text-green-700 border-green-100',
+                            'cover_soil': 'bg-orange-50 text-orange-700 border-orange-100',
+                            'blackout': 'bg-gray-50 text-gray-700 border-gray-100',
+                            'light': 'bg-yellow-50 text-yellow-700 border-yellow-100',
+                            'harvest': 'bg-amber-50 text-amber-700 border-amber-100',
+                          };
+                          const color = taskColors[task.task_type] || 'bg-gray-50 text-gray-700 border-gray-100';
+                          const taskLabels: Record<string, string> = {
+                            'seed_stack': 'Seed & Stack',
+                            'cover_soil': 'Cover Soil',
+                            'soak': 'Soak',
+                            'blackout': 'Blackout',
+                            'light': 'Light',
+                            'harvest': 'Harvest',
+                          };
+                          const taskLabel = taskLabels[task.task_type] || task.task_type;
+                          return (
+                            <div key={idx} className="px-5 py-4 flex items-start justify-between hover:bg-gray-50 transition">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3">
+                                  <span className={`px-2 py-1 text-xs font-bold rounded border ${color} whitespace-nowrap`}>
+                                    {taskLabel}
+                                  </span>
+                                  <span className="font-semibold text-gray-900">{task.crop_name}</span>
+                                </div>
+                                {task.notes && <p className="text-xs text-gray-500 mt-1 ml-0">{task.notes}</p>}
+                              </div>
+                              <div className="text-right ml-4">
+                                <div className="text-sm font-bold text-gray-900">{task.trays_needed} trays</div>
+                                <div className="text-xs text-gray-500">{task.grams_needed}g</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
+                /* Week/2-week/4-week view - condensed list */
                 <div className="space-y-3">
-                  {dailyOps.map((day) => (
+                  {filteredOps.map((day) => (
                     <div key={day.date} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                       <div className="bg-gray-50 border-b border-gray-200 px-5 py-3 flex items-center justify-between">
                         <div>
