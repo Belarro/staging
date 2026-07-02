@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-import crypto from 'crypto';
 import bcrypt from 'bcrypt';
+
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(16);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,22 +24,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user exists in admin_users table
-    let users;
-    try {
-      const query = `/admin_users?email=eq.${encodeURIComponent(email)}&select=id,email,password_hash`;
-      console.log('Login query:', query, 'for email:', email);
-      users = await fetchFromSupabase(query);
-      console.log('Supabase response:', JSON.stringify(users));
-    } catch (err) {
-      console.error('Supabase query error:', err);
-      return NextResponse.json(
-        { success: false, error: 'Database error' },
-        { status: 500 }
-      );
-    }
+    const users = await fetchFromSupabase(
+      `/admin_users?email=eq.${encodeURIComponent(email)}&select=id,email,password_hash`
+    );
 
     if (!Array.isArray(users) || users.length === 0) {
-      console.error('User not found. Email:', email, 'Response type:', typeof users, 'Is array:', Array.isArray(users), 'Length:', users?.length, 'Full response:', users);
       return NextResponse.json(
         { success: false, error: 'Invalid email or password' },
         { status: 401 }
@@ -48,8 +46,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create session token and store in database
-    const sessionToken = crypto.randomBytes(32).toString('hex');
+    // Create session token (simple UUID-like string)
+    const sessionToken = `session_${Date.now()}_${simpleHash(email)}`;
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     // Store session in database
@@ -57,7 +55,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       body: JSON.stringify({
         user_id: user.id,
-        token_hash: crypto.createHash('sha256').update(sessionToken).digest('hex'),
+        token_hash: simpleHash(sessionToken),
         expires_at: expiresAt,
       }),
     });
