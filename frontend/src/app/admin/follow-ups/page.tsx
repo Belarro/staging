@@ -75,8 +75,15 @@ const INTEREST_COLORS: Record<string, string> = {
 // Parse "DD-MM-YYYY HH:MM" or ISO → Date
 function parseVisitDate(ts: string | null): Date | null {
   if (!ts) return null;
-  const m = ts.match(/^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
-  if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4] ?? '00'}:${m[5] ?? '00'}:00`);
+  // Sales tracker dates are day-first: "26-06-2026 15:49" or "5/11/2025".
+  // Must not fall through to new Date() for these — JS reads slashes as US
+  // month-first (5/11/2025 -> May 11 instead of Nov 5).
+  const m = ts.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (m) {
+    return new Date(
+      `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}T${(m[4] ?? '0').padStart(2, '0')}:${m[5] ?? '00'}:00`
+    );
+  }
   const d = new Date(ts);
   return isNaN(d.getTime()) ? null : d;
 }
@@ -183,8 +190,10 @@ export default function FollowUpsPage() {
   const today = pending
     .filter(f => dueDateStr(f) <= todayStr)
     .sort((a, b) => {
-      const dateA = a.visited_at ? new Date(a.visited_at).getTime() : new Date(a.due_date).getTime();
-      const dateB = b.visited_at ? new Date(b.visited_at).getTime() : new Date(b.due_date).getTime();
+      // visited_at comes from the sales tracker as "DD-MM-YYYY HH:mm" — raw
+      // new Date() can't parse it, which silently broke newest-first sorting.
+      const dateA = parseVisitDate(a.visited_at)?.getTime() ?? new Date(a.due_date).getTime();
+      const dateB = parseVisitDate(b.visited_at)?.getTime() ?? new Date(b.due_date).getTime();
       return dateB - dateA;
     });
   // Upcoming: soonest due date first
