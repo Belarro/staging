@@ -91,13 +91,14 @@ export async function POST(request: NextRequest) {
         await ensureBucketExists();
 
         // Retry the upload after creating the bucket
+        const retryHeaders: Record<string, string> = {
+          'apikey': SUPABASE_SERVICE_ROLE_KEY!,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY!}`,
+          'Content-Type': file.type || 'image/jpeg',
+        };
         uploadRes = await fetch(uploadUrl, {
           method: 'POST',
-          headers: {
-            'apikey': SUPABASE_SERVICE_ROLE_KEY,
-            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            'Content-Type': file.type || 'image/jpeg',
-          },
+          headers: retryHeaders,
           body: buffer,
         });
       }
