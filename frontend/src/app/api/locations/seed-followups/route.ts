@@ -32,7 +32,7 @@ const REENGAGE_STAGES = [
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
 
     const locations = await fetchFromSupabase(

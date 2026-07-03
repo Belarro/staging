@@ -20,7 +20,7 @@ interface ImportRow {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
 
     const { rows }: { rows: ImportRow[] } = await request.json();

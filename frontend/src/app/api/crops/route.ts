@@ -5,7 +5,7 @@ import { logError } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
     const { searchParams } = new URL(request.url);
     const cropId = searchParams.get('id');
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
     const body = await request.json();
     const { name_en, name_de, flavor_en, flavor_de, status, photo_url, procedure, variants } = body;
@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
     const body = await request.json();
     const { id, name_en, name_de, flavor_en, flavor_de, status, photo_url, procedure, variants } = body;
@@ -324,7 +324,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // const auth = await requireAuth();
+    // // auth handled by middleware
     // // if (!auth.ok) return auth.response;
     const body = await request.json();
     const { id } = body;

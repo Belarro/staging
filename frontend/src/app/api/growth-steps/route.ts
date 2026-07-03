@@ -32,7 +32,7 @@ function pickFields(body: Record<string, unknown>) {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
 
     const { searchParams } = new URL(request.url);
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
 
     const body = await request.json();

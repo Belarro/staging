@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       ).catch(() => {}); // Silent fail, don't block login
     }
 
-    const token = signSession({ email, exp: Math.floor(Date.now() / 1000) + 86400 * 7 });
+    const token = await signSession({ email, exp: Math.floor(Date.now() / 1000) + 86400 * 7 });
     const response = NextResponse.json({ success: true, user: { email } });
 
     response.cookies.set('belarro_session', token, {

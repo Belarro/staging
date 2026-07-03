@@ -50,7 +50,7 @@ function fmt(d: Date): string {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
 
     const [orders, variants, crops, procedures, customers, batches, harvests, mixComponents] = await Promise.all([

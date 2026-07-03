@@ -4,7 +4,7 @@ import { fetchFromSupabase } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
     const data = await fetchFromSupabase('/form_submissions?order=created_at.desc');
     return NextResponse.json({ success: true, data: data || [] });

@@ -14,8 +14,8 @@ export async function middleware(request: NextRequest) {
 
   const token = request.cookies.get('belarro_session')?.value;
 
-  // Verify token
-  const session = token ? verifySession(token) : null;
+  // Verify token (await for async Web Crypto)
+  const session = token ? await verifySession(token) : null;
 
   // /admin/* pages require valid session
   if (pathname.startsWith('/admin')) {

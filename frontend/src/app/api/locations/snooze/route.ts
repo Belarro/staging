@@ -4,7 +4,7 @@ import { fetchFromSupabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
 
     const { location_id, days } = await request.json();

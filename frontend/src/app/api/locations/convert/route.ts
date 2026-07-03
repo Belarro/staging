@@ -4,7 +4,7 @@ import { fetchFromSupabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
     const { location_id } = await request.json();
     if (!location_id) return NextResponse.json({ success: false, error: 'location_id required' }, { status: 400 });

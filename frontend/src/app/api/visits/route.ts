@@ -4,7 +4,7 @@ import { fetchFromSupabase } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // auth handled by middleware
     // if (!auth.ok) return auth.response;
 
     // Fetch all non-archived locations sorted by visit date
