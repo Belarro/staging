@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-// import removed
+import { requireAuth } from '@/lib/auth';
 
 // One-time migration: creates gmail_tokens table via Supabase Management API
 // Requires SUPABASE_MANAGEMENT_TOKEN env var (Supabase personal access token)

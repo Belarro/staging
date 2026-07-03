@@ -2,7 +2,7 @@
 // Token format: exp.email.hmacSig (base64url encoded)
 // Secret: SESSION_SECRET || SUPABASE_SERVICE_ROLE_KEY (fallback)
 
-import crypto from 'crypto';
+import { createHmac } from 'crypto';
 
 const getSecret = (): string => {
   const secret = process.env.SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -20,8 +20,7 @@ export function signSession(payload: SessionPayload): string {
   const secret = getSecret();
   const exp = payload.exp || Math.floor(Date.now() / 1000) + 86400 * 7; // 7 days
   const msg = `${exp}.${payload.email}`;
-  const hmac = crypto
-    .createHmac('sha256', secret)
+  const hmac = createHmac('sha256', secret)
     .update(msg)
     .digest('base64url');
   return `${msg}.${hmac}`;
@@ -35,8 +34,7 @@ export function verifySession(token: string): SessionPayload | null {
 
     const [exp, email, sig] = parts;
     const msg = `${exp}.${email}`;
-    const hmac = crypto
-      .createHmac('sha256', secret)
+    const hmac = createHmac('sha256', secret)
       .update(msg)
       .digest('base64url');
 
