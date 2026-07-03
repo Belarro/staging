@@ -41,8 +41,9 @@ export async function POST(request: NextRequest) {
         isValid = false;
       }
     } else {
-      // Legacy: constant-time comparison for plain/hashed fallback
-      isValid = storedHash === password || bcrypt.compareSync(password, storedHash || '');
+      // Legacy row: password stored as plaintext — plain equality only.
+      // On success the hash is upgraded to bcrypt below.
+      isValid = typeof storedHash === 'string' && storedHash.length > 0 && storedHash === password;
     }
 
     if (!isValid) {

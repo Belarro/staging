@@ -28,10 +28,14 @@ function bufferToBase64url(buf: ArrayBuffer): string {
     .replace(/=/g, '');
 }
 
-function base64urlToBuffer(str: string): Uint8Array {
+function base64urlToBuffer(str: string): ArrayBuffer {
   const padded = str.padEnd(str.length + (4 - (str.length % 4)) % 4, '=');
   const binary = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
-  return new Uint8Array([...binary].map(c => c.charCodeAt(0)));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
 }
 
 export interface SessionPayload {
@@ -40,39 +44,44 @@ export interface SessionPayload {
   role?: 'admin' | 'farm';
 }
 
+// Token format: base64url(JSON payload) + '.' + base64url(HMAC signature).
+// Payload is JSON-encoded so emails with dots can't break parsing.
 export async function signSession(payload: SessionPayload): Promise<string> {
   const key = await getSecretKey();
   const exp = payload.exp || Math.floor(Date.now() / 1000) + 86400 * 7;
-  const msg = `${exp}.${payload.email}`;
+  const body = bufferToBase64url(
+    encoder.encode(JSON.stringify({ email: payload.email, exp, role: payload.role })).buffer as ArrayBuffer
+  );
 
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(msg));
-  const sigB64 = bufferToBase64url(sig);
-
-  return `${msg}.${sigB64}`;
+  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(body));
+  return `${body}.${bufferToBase64url(sig)}`;
 }
 
 export async function verifySession(token: string): Promise<SessionPayload | null> {
   try {
     const key = await getSecretKey();
     const parts = token.split('.');
-    if (parts.length !== 3) return null;
+    if (parts.length !== 2) return null;
 
-    const [exp, email, sig] = parts;
-    const msg = `${exp}.${email}`;
+    const [body, sig] = parts;
 
     const isValid = await crypto.subtle.verify(
       'HMAC',
       key,
       base64urlToBuffer(sig),
-      encoder.encode(msg)
+      encoder.encode(body)
     );
 
     if (!isValid) return null;
 
-    const expTime = parseInt(exp, 10);
-    if (expTime < Math.floor(Date.now() / 1000)) return null;
+    const decoded = JSON.parse(
+      new TextDecoder().decode(base64urlToBuffer(body))
+    ) as SessionPayload;
 
-    return { email, exp: expTime };
+    if (!decoded.email || !decoded.exp) return null;
+    if (decoded.exp < Math.floor(Date.now() / 1000)) return null;
+
+    return decoded;
   } catch (err) {
     return null;
   }
