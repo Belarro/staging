@@ -17,7 +17,12 @@ async function getSecretKey(): Promise<CryptoKey> {
 }
 
 function bufferToBase64url(buf: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=/g, '');
@@ -26,7 +31,7 @@ function bufferToBase64url(buf: ArrayBuffer): string {
 function base64urlToBuffer(str: string): Uint8Array {
   const padded = str.padEnd(str.length + (4 - (str.length % 4)) % 4, '=');
   const binary = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
-  return new Uint8Array(binary.split('').map(c => c.charCodeAt(0)));
+  return new Uint8Array([...binary].map(c => c.charCodeAt(0)));
 }
 
 export interface SessionPayload {
