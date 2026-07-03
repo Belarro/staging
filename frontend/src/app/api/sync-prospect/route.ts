@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
 
+const SYNC_SECRET = process.env.PROSPECT_SYNC_SECRET || '';
+
 // Normalize phone: remove all non-digits and +
 const normalizePhone = (phone: string): string => {
   if (!phone) return '';
@@ -220,7 +222,14 @@ async function seedFollowUps(customerId: string, visitDate: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const payload: ProspectPayload = await request.json();
+    const headerSecret = request.headers.get('x-sync-secret');
+    const body = await request.json();
+    const providedSecret = headerSecret || body.secret;
+    if (!SYNC_SECRET || providedSecret !== SYNC_SECRET) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const payload: ProspectPayload = body;
 
     // Validate required fields
     if (!payload.locationName || !payload.contactPerson || !payload.directPhone) {

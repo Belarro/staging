@@ -4,7 +4,7 @@ import { fetchFromSupabase } from '@/lib/supabase';
 
 export async function POST() {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
 
     const now = new Date();

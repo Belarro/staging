@@ -9,7 +9,7 @@ type Params = {
 
 export async function GET(request: NextRequest, props: Params) {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const { id } = await props.params;
 
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest, props: Params) {
 
 export async function PUT(request: NextRequest, props: Params) {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const { id } = await props.params;
     const body = await request.json();
@@ -76,7 +76,7 @@ export async function PUT(request: NextRequest, props: Params) {
 
 export async function DELETE(request: NextRequest, props: Params) {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const { id } = await props.params;
 

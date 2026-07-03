@@ -26,7 +26,7 @@ const REENGAGE_GAPS: Record<number, number> = { 1: 0, 2: 5, 3: 14, 4: 30 };
 
 export async function DELETE(_request: NextRequest, props: Params) {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const { id } = await props.params;
 
@@ -66,7 +66,7 @@ export async function DELETE(_request: NextRequest, props: Params) {
 
 export async function PUT(request: NextRequest, props: Params) {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const { id } = await props.params;
     const body = await request.json();

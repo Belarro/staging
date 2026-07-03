@@ -6,7 +6,7 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: NextRequest, props: Params) {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const { id } = await props.params;
     const body = await request.json();

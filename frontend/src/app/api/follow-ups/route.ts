@@ -130,7 +130,7 @@ function isOldLead(timestamp: string | null, createdAt: string | null): boolean 
 
 export async function GET(request: NextRequest) {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
 
     const followups = await fetchFromSupabase(
@@ -241,7 +241,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const { location_id, visited_at } = await request.json();
     if (!location_id) return NextResponse.json({ success: false, error: 'location_id required' }, { status: 400 });

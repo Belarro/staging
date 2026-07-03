@@ -5,7 +5,7 @@ import { fetchFromSupabase } from '@/lib/supabase';
 export async function GET(request: NextRequest) {
   try {
     // TODO: Re-enable auth once admin_users table is populated
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
 
     // Fetch Belarro customers + SalesTracker locations in parallel
@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // TODO: Re-enable auth once admin_users table is populated
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const body = await request.json();
     const {

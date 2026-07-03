@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 // One-time migration: creates gmail_tokens table via Supabase Management API
 // Requires SUPABASE_MANAGEMENT_TOKEN env var (Supabase personal access token)
 export async function POST() {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
 
   const projectRef = 'wbqzlxdyjdmbzifhsyil';

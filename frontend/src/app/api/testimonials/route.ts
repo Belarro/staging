@@ -4,7 +4,7 @@ import { fetchFromSupabase } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const data = await fetchFromSupabase('/testimonials?order=sort_order.asc');
     return NextResponse.json({ success: true, data: data || [] });
@@ -15,7 +15,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const body = await request.json();
     const data = await fetchFromSupabase('/testimonials', {

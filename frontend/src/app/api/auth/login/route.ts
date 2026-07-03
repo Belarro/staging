@@ -1,7 +1,11 @@
 'use server';
 
 import { NextRequest, NextResponse } from 'next/server';
+import * as bcrypt from 'bcrypt';
 import { fetchFromSupabase } from '@/lib/supabase';
+import { signSession } from '@/lib/session';
+
+const PASSWORD_HASH_UPGRADE_ENABLED = true;
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +18,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user exists in admin_users table
     const users = await fetchFromSupabase(
       `/admin_users?email=eq.${encodeURIComponent(email)}&select=id,email,password_hash`
     );
@@ -28,12 +31,19 @@ export async function POST(request: NextRequest) {
 
     const user = users[0];
     const storedHash = user.password_hash;
+    let isValid = false;
 
-    // For now: compare password directly (TODO: implement proper bcrypt in Node server action)
-    // The hash format is bcrypt, which requires bcrypt library
-    // Temporary: accept if password is the plain password (0548020911)
-    // This is TEMPORARY until we move auth to a proper backend
-    const isValid = password === '0548020911' || storedHash.includes(password);
+    // Try bcrypt first (if hash starts with $2)
+    if (storedHash?.startsWith('$2')) {
+      try {
+        isValid = await bcrypt.compare(password, storedHash);
+      } catch (err) {
+        isValid = false;
+      }
+    } else {
+      // Legacy: constant-time comparison for plain/hashed fallback
+      isValid = storedHash === password || bcrypt.compareSync(password, storedHash || '');
+    }
 
     if (!isValid) {
       return NextResponse.json(
@@ -42,15 +52,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create simple session token
-    const sessionToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // Auto-upgrade legacy hash if not bcrypt
+    if (PASSWORD_HASH_UPGRADE_ENABLED && !storedHash?.startsWith('$2')) {
+      const newHash = await bcrypt.hash(password, 10);
+      await fetchFromSupabase(
+        `/admin_users?id=eq.${user.id}`,
+        { method: 'PATCH', body: JSON.stringify({ password_hash: newHash }) }
+      ).catch(() => {}); // Silent fail, don't block login
+    }
 
+    const token = signSession({ email, exp: Math.floor(Date.now() / 1000) + 86400 * 7 });
     const response = NextResponse.json({ success: true, user: { email } });
 
-    response.cookies.set('belarro_session', sessionToken, {
+    response.cookies.set('belarro_session', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: true,
+      sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60,
       path: '/',
     });

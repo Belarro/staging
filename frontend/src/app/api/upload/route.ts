@@ -41,7 +41,7 @@ async function ensureBucketExists() {
 
 export async function POST(request: NextRequest) {
   try {
-    // const auth = await requireAuth();
+    const auth = await requireAuth();
     // if (!auth.ok) return auth.response;
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
