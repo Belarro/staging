@@ -121,7 +121,7 @@ export default function FollowUpsPage() {
   const [replying, setReplying] = useState<string | null>(null); // followup id being marked as replied
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null); // followup id being emailed
-  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<{ id: string; msg: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FollowUp | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -281,13 +281,21 @@ export default function FollowUpsPage() {
   };
 
   const markChannelSent = (followup: FollowUp, via: string) => {
-    setSentChannels(prev => {
-      const current = new Set(prev[followup.id] || []);
-      current.add(via);
-      return { ...prev, [followup.id]: current };
-    });
+    const current = new Set(sentChannels[followup.id] || []);
+    // include channels already persisted on the row from a previous session
+    if (followup.status === 'pending' && followup.sent_via) {
+      followup.sent_via.split('+').forEach(c => current.add(c));
+    }
+    current.add(via);
+    setSentChannels(prev => ({ ...prev, [followup.id]: current }));
     setShowMessage(false);
     setSelected(null);
+    // Persist so the ✓ survives reloads and blocks accidental double-sends
+    fetch(`/api/follow-ups/${followup.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'pending', sent_via: Array.from(current).join('+') }),
+    }).catch(() => {});
   };
 
   const autoLog = async (followup: FollowUp, via: string) => {
@@ -355,6 +363,10 @@ export default function FollowUpsPage() {
 
   const sendEmail = async (followup: FollowUp) => {
     if (!followup.location.email) return;
+    // Hard block: this stage's email was already sent (state or DB)
+    const already = sentChannels[followup.id]?.has('email')
+      || (followup.status === 'pending' && (followup.sent_via || '').includes('email'));
+    if (already) return;
     setSendingEmail(followup.id);
     setEmailError(null);
     try {
@@ -378,10 +390,10 @@ export default function FollowUpsPage() {
         markChannelSent(followup, 'email');
         setEmailError(null);
       } else {
-        setEmailError(json.error || 'Send failed');
+        setEmailError({ id: followup.id, msg: json.error || 'Send failed' });
       }
     } catch {
-      setEmailError('Network error — try again');
+      setEmailError({ id: followup.id, msg: 'Network error — try again' });
     } finally {
       setSendingEmail(null);
     }
@@ -393,10 +405,16 @@ export default function FollowUpsPage() {
     const contactName = f.location.contact_person || f.location.name;
     const landline = isLandline(f.whatsapp_number || f.location.phone);
     const hasWhatsApp = !!(f.whatsapp_number) && !landline;
-    const sent = sentChannels[f.id] || new Set<string>();
+    // Merge in-memory marks with channels persisted on the row, so the
+    // ✓ state survives page reloads and blocks double-sends.
+    const sent = new Set<string>(sentChannels[f.id] || []);
+    if (f.status === 'pending' && f.sent_via) {
+      f.sent_via.split('+').forEach(c => { if (c) sent.add(c); });
+    }
     const waSent = sent.has('whatsapp');
     const emailSent = sent.has('email');
     const anySent = waSent || emailSent;
+    const cardEmailError = emailError && emailError.id === f.id ? emailError.msg : null;
 
     return (
       <div id={`card-${f.id}`} className={`bg-white border rounded-xl p-5 shadow-sm flex flex-col gap-4 hover:shadow-md transition ${highlightId === f.id ? 'border-green-500 ring-2 ring-green-400' : isOverdue ? 'border-red-300' : 'border-gray-200'}`}>
@@ -521,16 +539,16 @@ export default function FollowUpsPage() {
               {f.location.email && (
                 <button
                   onClick={() => sendEmail(f)}
-                  disabled={sendingEmail === f.id}
+                  disabled={sendingEmail === f.id || emailSent}
                   className={`flex-1 font-semibold py-2 rounded-lg text-sm transition flex items-center justify-center gap-1.5 ${
                     emailSent
-                      ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                      ? 'bg-blue-100 text-blue-700 border border-blue-300 cursor-not-allowed'
                       : sendingEmail === f.id
                       ? 'bg-blue-400 text-white cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700 text-white'
                   }`}
                 >
-                  {emailSent ? '✓ Email' : sendingEmail === f.id ? (
+                  {emailSent ? '✓ Email sent' : sendingEmail === f.id ? (
                     <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> Sending...</>
                   ) : '📧 Email'}
                 </button>
@@ -544,6 +562,12 @@ export default function FollowUpsPage() {
                 </button>
               )}
             </div>
+
+            {cardEmailError && (
+              <p className="text-xs text-red-600 font-semibold">
+                ✗ Email failed: {cardEmailError} — <a href="/admin/settings" className="underline">check Gmail connection</a>
+              </p>
+            )}
 
             {/* Done with stage — appears once at least one channel sent */}
             {anySent && (
@@ -821,7 +845,7 @@ export default function FollowUpsPage() {
                   </button>
                 )}
                 {emailError && (
-                  <p className="text-xs text-red-600 font-semibold mt-1">{emailError} — <a href="/admin/settings" className="underline">Check Gmail connection</a></p>
+                  <p className="text-xs text-red-600 font-semibold mt-1">{emailError.msg} — <a href="/admin/settings" className="underline">Check Gmail connection</a></p>
                 )}
               </div>
 

@@ -78,6 +78,17 @@ export async function PUT(request: NextRequest, props: Params) {
 
     const now = new Date();
 
+    // Partial update: record which channels were sent (email/whatsapp) while
+    // the stage stays open. Persists the ✓ marks across page reloads so the
+    // same message can't be sent twice by mistake. No stage advance.
+    if (status === 'pending') {
+      await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ sent_via: sent_via || null, updated_at: now.toISOString() }),
+      });
+      return NextResponse.json({ success: true, message: 'Channel recorded' });
+    }
+
     // Mark this stage as completed
     await fetchFromSupabase(`/belarro_v4_follow_up?id=eq.${id}`, {
       method: 'PATCH',

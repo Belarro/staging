@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
+import { verifySession } from '@/lib/session';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 if (!SUPABASE_URL) {
@@ -105,6 +106,19 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Auth: admin session cookie (web UI) OR shared secret (SalesTracker app).
+    // This endpoint sends email from Ron's Gmail — it must never be open.
+    const cookieToken = request.cookies.get('belarro_session')?.value;
+    const session = cookieToken ? await verifySession(cookieToken) : null;
+    const syncSecret = process.env.SALETRACKER_SYNC_SECRET || '';
+    const headerSecret = request.headers.get('x-sync-secret');
+    if (!session && (!syncSecret || headerSecret !== syncSecret)) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401, headers: corsHeaders }
+      );
+    }
+
     const { followup_id, to, subject, body, language } = await request.json();
 
     if (!to || !subject || !body) {
