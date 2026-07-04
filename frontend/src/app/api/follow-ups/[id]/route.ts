@@ -19,9 +19,23 @@ function addBusinessDays(from: Date, days: number): Date {
   return result;
 }
 
-// Days between stages — both new-lead and re-engage flows now share the
-// identical 2h/2d/5d/14d/30d cadence (5 stages). See FOLLOWUP_SYSTEM_SPEC.md.
-const STAGE_GAPS: Record<number, number> = { 1: 0, 2: 2, 3: 5, 4: 14, 5: 30 };
+// Days between stages — new-lead is 5 stages (2h/2d/5d/14d/30d), re-engage is
+// 4 stages (2h/2d/5d/30d, no 14-day stage). See FOLLOWUP_COPY_V2.md.
+const NEW_STAGE_GAPS: Record<number, number> = { 1: 0, 2: 2, 3: 5, 4: 14, 5: 30 };
+const REENGAGE_STAGE_GAPS: Record<number, number> = { 1: 0, 2: 2, 3: 5, 4: 30 };
+
+const OLD_LEAD_DAYS = 30;
+
+function isOldLead(timestamp: string | null, createdAt: string | null): boolean {
+  const dateStr = timestamp || createdAt;
+  if (!dateStr) return true;
+  const cleaned = String(dateStr).trim()
+    .replace(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/, '$3-$2-$1')
+    .replace(' ', 'T');
+  const date = new Date(cleaned);
+  if (isNaN(date.getTime())) return true;
+  return (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24) > OLD_LEAD_DAYS;
+}
 
 export async function DELETE(_request: NextRequest, props: Params) {
   try {
@@ -115,8 +129,14 @@ export async function PUT(request: NextRequest, props: Params) {
 
         if (next && next.length > 0) {
           const n = next[0];
-          // Both flows share the identical 5-stage cadence now, so a single
-          // gap table applies regardless of flow.
+          // New-lead and re-engage have different stage counts/gaps now, so
+          // we must look up the location's visit date to know which flow
+          // this lead is on before picking a gap table.
+          const loc = await fetchFromSupabase(
+            `/locations?id=eq.${cur.location_id}&select=timestamp,created_at`
+          );
+          const flow: 'new' | 'reengage' = isOldLead(loc?.[0]?.timestamp, loc?.[0]?.created_at) ? 'reengage' : 'new';
+          const STAGE_GAPS = flow === 'reengage' ? REENGAGE_STAGE_GAPS : NEW_STAGE_GAPS;
           // Gap values are cumulative days from the visit, so the next stage
           // comes (gap[next] - gap[current]) days after this send.
           const curStage = cur.stage || cur.follow_up_number || 1;

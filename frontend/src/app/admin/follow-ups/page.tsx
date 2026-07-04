@@ -422,15 +422,15 @@ export default function FollowUpsPage() {
             )}
           </div>
           <span className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full ${STAGE_COLORS[f.stage] || 'bg-gray-100 text-gray-600'}`}>
-            {f.flow === 'reengage' ? 'Re-engage' : 'Lead'} {f.stage}/{f.total_stages || 5}
+            {f.flow === 'reengage' ? 'Re-engage' : 'Lead'} {f.stage}/{f.total_stages || (f.flow === 'reengage' ? 4 : 5)}
           </span>
         </div>
 
-        {/* Progress dots — 5 stages for both flows (2h/2d/5d/14d/30d) */}
+        {/* Progress dots — new-lead: 5 dots (2h/2d/5d/2w/1m). re-engage: 4 dots (2h/2d/5d/1m) */}
         <div className="flex items-center gap-1.5">
-          {Array.from({ length: f.total_stages || 5 }, (_, i) => i + 1).map(s => {
+          {Array.from({ length: f.total_stages || (f.flow === 'reengage' ? 4 : 5) }, (_, i) => i + 1).map(s => {
             const newLabels: Record<number,string> = { 1:'2h', 2:'2d', 3:'5d', 4:'2w', 5:'1m' };
-            const reLabels: Record<number,string> = { 1:'2h', 2:'2d', 3:'5d', 4:'2w', 5:'1m' };
+            const reLabels: Record<number,string> = { 1:'2h', 2:'2d', 3:'5d', 4:'1m' };
             const label = f.flow === 'reengage' ? reLabels[s] : newLabels[s];
             return (
             <div key={s} className="flex-1 flex flex-col items-center gap-1">

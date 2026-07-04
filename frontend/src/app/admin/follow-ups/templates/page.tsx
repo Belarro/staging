@@ -18,12 +18,22 @@ const FLOW_LABELS: Record<string, string> = {
   reengage: 'Re-Engage',
 };
 
-const STAGE_OFFSET_LABEL: Record<number, string> = {
-  1: '2 hours',
-  2: '2 days',
-  3: '5 days',
-  4: '14 days',
-  5: '30 days',
+// New-lead: 5 stages (2h/2d/5d/14d/30d). Re-engage: 4 stages (2h/2d/5d/30d,
+// no 14-day stage) — so stage 4 means something different per flow.
+const STAGE_OFFSET_LABEL: Record<'new' | 'reengage', Record<number, string>> = {
+  new: {
+    1: '2 hours',
+    2: '2 days',
+    3: '5 days',
+    4: '14 days',
+    5: '30 days',
+  },
+  reengage: {
+    1: '2 hours',
+    2: '2 days',
+    3: '5 days',
+    4: '30 days',
+  },
 };
 
 const SAMPLE_NAME = 'Maria';
@@ -40,6 +50,7 @@ function findInvalidPlaceholder(body: string): string | null {
 }
 
 function TemplateCard({ template, onSaved }: { template: Template; onSaved: (t: Template) => void }) {
+  const offsetLabel = STAGE_OFFSET_LABEL[template.flow][template.stage];
   const [title, setTitle] = useState(template.title);
   const [body, setBody] = useState(template.body);
   const [saving, setSaving] = useState(false);
@@ -80,7 +91,7 @@ function TemplateCard({ template, onSaved }: { template: Template; onSaved: (t: 
     <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-bold uppercase tracking-wide text-gray-400">
-          Stage {template.stage} · {STAGE_OFFSET_LABEL[template.stage]} · {template.language.toUpperCase()}
+          Stage {template.stage} · {offsetLabel} · {template.language.toUpperCase()}
         </span>
         {template.updated_at && (
           <span className="text-[11px] text-gray-400">
@@ -170,7 +181,7 @@ export default function TemplateEditorPage() {
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Follow-up Templates</h1>
           <p className="text-sm text-gray-500 mt-1">
-            All 20 templates (5 stages x 2 flows x 2 languages) — this is what actually gets sent.
+            All 18 templates (new-lead: 5 stages, re-engage: 4 stages, x 2 languages) — this is what actually gets sent.
           </p>
         </div>
         <a

@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
       const phone = parsePhone(loc.direct_phone) || parsePhone(loc.business_phone);
       const lang = (loc.language || '').toLowerCase().trim();
       const flow: 'new' | 'reengage' = isOldLead(loc.timestamp, loc.created_at) ? 'reengage' : 'new';
-      const totalStages = 5; // both flows are 5 stages on the identical 2h/2d/5d/14d/30d cadence
+      const totalStages = flow === 'reengage' ? 4 : 5; // new-lead: 2h/2d/5d/14d/30d (5). re-engage: 2h/2d/5d/30d (4, no 14d stage)
       const { title, text } = await buildMessage(flow, f.stage, lang, contactName);
 
       return {
@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
       return {
         ...f,
         flow,
-        total_stages: 5, // both flows are 5 stages on the identical 2h/2d/5d/14d/30d cadence
+        total_stages: flow === 'reengage' ? 4 : 5, // new-lead: 5 stages. re-engage: 4 stages (no 14d stage)
         message_title: title,
         message_text: text,
         whatsapp_number: parsePhone(loc.direct_phone) || parsePhone(loc.business_phone),
@@ -206,14 +206,14 @@ export async function POST(request: NextRequest) {
     const base = new Date(visited_at || new Date()).getTime();
     const old = isOldLead(visited_at, null);
 
-    // Both flows now share the identical 2h/2d/5d/14d/30d cadence (5 stages).
+    // New-lead: 5 stages at 2h/2d/5d/14d/30d. Re-engage: 4 stages at
+    // 2h/2d/5d/30d — the 14-day stage is dropped entirely (not left blank).
     // Re-engage is measured from now (send time), not from the old visit date.
     const stages = old ? [
       { stage: 1, follow_up_number: 1, follow_up_days: 0,  offset: 2 * 60 * 60 * 1000 },
       { stage: 2, follow_up_number: 2, follow_up_days: 2,  offset: 2  * 24 * 60 * 60 * 1000 },
       { stage: 3, follow_up_number: 3, follow_up_days: 5,  offset: 5  * 24 * 60 * 60 * 1000 },
-      { stage: 4, follow_up_number: 4, follow_up_days: 14, offset: 14 * 24 * 60 * 60 * 1000 },
-      { stage: 5, follow_up_number: 5, follow_up_days: 30, offset: 30 * 24 * 60 * 60 * 1000 },
+      { stage: 4, follow_up_number: 4, follow_up_days: 30, offset: 30 * 24 * 60 * 60 * 1000 },
     ] : [
       { stage: 1, follow_up_number: 1, follow_up_days: 0,  offset: 2 * 60 * 60 * 1000 },
       { stage: 2, follow_up_number: 2, follow_up_days: 2,  offset: 2  * 24 * 60 * 60 * 1000 },
