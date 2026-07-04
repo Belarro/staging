@@ -19,10 +19,9 @@ function addBusinessDays(from: Date, days: number): Date {
   return result;
 }
 
-// Days between stages for new lead flow
-const NEW_LEAD_GAPS: Record<number, number> = { 1: 0, 2: 2, 3: 5, 4: 14, 5: 30 };
-// Days between stages for re-engage flow
-const REENGAGE_GAPS: Record<number, number> = { 1: 0, 2: 5, 3: 14, 4: 30 };
+// Days between stages — both new-lead and re-engage flows now share the
+// identical 2h/2d/5d/14d/30d cadence (5 stages). See FOLLOWUP_SYSTEM_SPEC.md.
+const STAGE_GAPS: Record<number, number> = { 1: 0, 2: 2, 3: 5, 4: 14, 5: 30 };
 
 export async function DELETE(_request: NextRequest, props: Params) {
   try {
@@ -116,20 +115,13 @@ export async function PUT(request: NextRequest, props: Params) {
 
         if (next && next.length > 0) {
           const n = next[0];
-          // Flow is determined by how many stages were seeded for this
-          // location: new-lead flow has 5, re-engage has 4. (The old
-          // follow_up_days heuristic misclassified new leads as re-engage
-          // and pushed stage 2 out +5 days instead of +2.)
-          const allStages = await fetchFromSupabase(
-            `/belarro_v4_follow_up?location_id=eq.${cur.location_id}&select=stage`
-          );
-          const maxStage = Math.max(0, ...(allStages || []).map((r: any) => r.stage || 0));
-          const gaps = maxStage >= 5 ? NEW_LEAD_GAPS : REENGAGE_GAPS;
+          // Both flows share the identical 5-stage cadence now, so a single
+          // gap table applies regardless of flow.
           // Gap values are cumulative days from the visit, so the next stage
           // comes (gap[next] - gap[current]) days after this send.
           const curStage = cur.stage || cur.follow_up_number || 1;
           const daysToAdd = Math.max(
-            (gaps[nextStage] ?? n.follow_up_days ?? 2) - (gaps[curStage] ?? 0),
+            (STAGE_GAPS[nextStage] ?? n.follow_up_days ?? 2) - (STAGE_GAPS[curStage] ?? 0),
             1
           );
           const newDueDate = addBusinessDays(now, daysToAdd);

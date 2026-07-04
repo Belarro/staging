@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
 // import removed
 
-const OLD_LEAD_DAYS = 60;
+const OLD_LEAD_DAYS = 30;
 
 function isOldLead(timestamp: string | null, createdAt: string | null): boolean {
   const dateStr = timestamp || createdAt;
@@ -23,11 +23,13 @@ const NEW_STAGES = [
   { stage: 5, follow_up_number: 5, follow_up_days: 30, offset: 30 * 24 * 60 * 60 * 1000 },
 ];
 
+// Re-engage now shares the identical 2h/2d/5d/14d/30d cadence as new-lead (5 stages).
 const REENGAGE_STAGES = [
-  { stage: 1, follow_up_number: 1, follow_up_days: 0,  offset: 0 },
-  { stage: 2, follow_up_number: 2, follow_up_days: 5,  offset: 5  * 24 * 60 * 60 * 1000 },
-  { stage: 3, follow_up_number: 3, follow_up_days: 14, offset: 14 * 24 * 60 * 60 * 1000 },
-  { stage: 4, follow_up_number: 4, follow_up_days: 30, offset: 30 * 24 * 60 * 60 * 1000 },
+  { stage: 1, follow_up_number: 1, follow_up_days: 0,  offset: 2 * 60 * 60 * 1000 },
+  { stage: 2, follow_up_number: 2, follow_up_days: 2,  offset: 2  * 24 * 60 * 60 * 1000 },
+  { stage: 3, follow_up_number: 3, follow_up_days: 5,  offset: 5  * 24 * 60 * 60 * 1000 },
+  { stage: 4, follow_up_number: 4, follow_up_days: 14, offset: 14 * 24 * 60 * 60 * 1000 },
+  { stage: 5, follow_up_number: 5, follow_up_days: 30, offset: 30 * 24 * 60 * 60 * 1000 },
 ];
 
 export async function POST(request: NextRequest) {

@@ -186,16 +186,11 @@ export default function FollowUpsPage() {
   const dueDateStr = (f: FollowUp) => new Date(f.due_date).toLocaleDateString('sv');
 
   const pending = followups.filter(f => f.status === 'pending');
-  // Today: most recently visited first
+  // Today's Queue (spec 3.5): due_date ascending so the most overdue rows
+  // surface first — this is the literal top-to-bottom daily routine.
   const today = pending
     .filter(f => dueDateStr(f) <= todayStr)
-    .sort((a, b) => {
-      // visited_at comes from the sales tracker as "DD-MM-YYYY HH:mm" — raw
-      // new Date() can't parse it, which silently broke newest-first sorting.
-      const dateA = parseVisitDate(a.visited_at)?.getTime() ?? new Date(a.due_date).getTime();
-      const dateB = parseVisitDate(b.visited_at)?.getTime() ?? new Date(b.due_date).getTime();
-      return dateB - dateA;
-    });
+    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
   // Upcoming: soonest due date first
   const upcoming = pending
     .filter(f => dueDateStr(f) > todayStr)
@@ -431,11 +426,11 @@ export default function FollowUpsPage() {
           </span>
         </div>
 
-        {/* Progress dots — 4 for re-engage, 5 for new lead */}
+        {/* Progress dots — 5 stages for both flows (2h/2d/5d/14d/30d) */}
         <div className="flex items-center gap-1.5">
           {Array.from({ length: f.total_stages || 5 }, (_, i) => i + 1).map(s => {
             const newLabels: Record<number,string> = { 1:'2h', 2:'2d', 3:'5d', 4:'2w', 5:'1m' };
-            const reLabels: Record<number,string> = { 1:'now', 2:'5d', 3:'2w', 4:'1m' };
+            const reLabels: Record<number,string> = { 1:'2h', 2:'2d', 3:'5d', 4:'2w', 5:'1m' };
             const label = f.flow === 'reengage' ? reLabels[s] : newLabels[s];
             return (
             <div key={s} className="flex-1 flex flex-col items-center gap-1">
@@ -664,13 +659,21 @@ export default function FollowUpsPage() {
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Follow-ups</h1>
           <p className="text-sm text-gray-500 mt-1">Your daily sales calls — leads only</p>
         </div>
-        <button
-          onClick={fixDueDates}
-          disabled={fixing}
-          className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-        >
-          {fixing ? 'Fixing...' : 'Fix Due Dates'}
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href="/admin/follow-ups/templates"
+            className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 font-semibold"
+          >
+            ✏️ Templates
+          </a>
+          <button
+            onClick={fixDueDates}
+            disabled={fixing}
+            className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {fixing ? 'Fixing...' : 'Fix Due Dates'}
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

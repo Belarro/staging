@@ -81,15 +81,17 @@ Result: **No duplicate customers possible** for same phone/email.
 
 ## Follow-ups: `belarro_v4_follow_up`
 
-When a NEW customer is created, 5 follow-up records are auto-created:
+When a NEW customer is created, 5 follow-up records are auto-created. Both the
+new-lead flow and the re-engage flow share the identical cadence — see
+`FOLLOWUP_SYSTEM_SPEC.md` (source of truth for message copy and schedule):
 
-| Stage | Days | Purpose |
+| Stage | Offset | Purpose |
 |-------|------|---------|
-| 1 | 0 | First contact (today) |
-| 2 | 2 | 2-day follow-up |
-| 3 | 5 | 5-day follow-up |
-| 4 | 14 | 2-week follow-up |
-| 5 | 30 | 1-month follow-up |
+| 1 | 2 hours | First contact |
+| 2 | Day 2 | 2-day follow-up |
+| 3 | Day 5 | 5-day follow-up |
+| 4 | Day 14 | 2-week follow-up |
+| 5 | Day 30 | 1-month follow-up |
 
 **Idempotency:** If follow-ups already exist for a customer, no duplicates are created.
 

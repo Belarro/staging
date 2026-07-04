@@ -1155,7 +1155,7 @@ select cron.unschedule('belarro-daily-followups');
 
 ### `src/app/api/sync-sales-tracker/route.ts`
 
-**Purpose:** Receives a closed-deal prospect from Google Apps Script, creates/updates a `belarro_v4_customer` with status `active`, and generates the standard 5 follow-ups (days 0, 3, 7, 14, 30). Idempotent on restaurant name to avoid duplicates on repeated edits.
+**Purpose:** Receives a closed-deal prospect from Google Apps Script, creates/updates a `belarro_v4_customer` with status `active`, and generates the standard 5 follow-ups (2 hours, day 2, day 5, day 14, day 30 — see `FOLLOWUP_SYSTEM_SPEC.md`, the source of truth for this schedule). Idempotent on restaurant name to avoid duplicates on repeated edits.
 
 **Code:**
 
@@ -1166,7 +1166,14 @@ import { fetchFromSupabase } from '@/lib/supabase';
 // Shared secret guards this public endpoint (Apps Script can't log in).
 const SYNC_SECRET = process.env.SALETRACKER_SYNC_SECRET || '';
 
-const FOLLOW_UP_DAYS = [0, 3, 7, 14, 30];
+// Offsets in ms from now: 2h, day 2, day 5, day 14, day 30 (matches FOLLOWUP_SYSTEM_SPEC.md)
+const FOLLOW_UP_OFFSETS_MS = [
+  2 * 60 * 60 * 1000,
+  2 * 24 * 60 * 60 * 1000,
+  5 * 24 * 60 * 60 * 1000,
+  14 * 24 * 60 * 60 * 1000,
+  30 * 24 * 60 * 60 * 1000,
+];
 
 export async function POST(request: NextRequest) {
   try {
@@ -1231,16 +1238,16 @@ export async function POST(request: NextRequest) {
 
     // --- Generate the 5 standard follow-ups ---
     const followUps = [];
-    for (let i = 0; i < FOLLOW_UP_DAYS.length; i++) {
-      const due = new Date();
-      due.setDate(due.getDate() + FOLLOW_UP_DAYS[i]);
+    const baseMs = Date.now();
+    for (let i = 0; i < FOLLOW_UP_OFFSETS_MS.length; i++) {
+      const due = new Date(baseMs + FOLLOW_UP_OFFSETS_MS[i]);
       const fu = await fetchFromSupabase('/belarro_v4_follow_up', {
         method: 'POST',
         body: JSON.stringify({
           id: crypto.randomUUID(),
           customer_id: customerId,
           follow_up_number: i + 1,
-          follow_up_days: FOLLOW_UP_DAYS[i],
+          stage: i + 1,
           due_date: due.toISOString(),
           status: 'pending',
           sent_via: null,
