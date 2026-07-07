@@ -50,6 +50,7 @@ export default function OrdersPage() {
   const [editGroup, setEditGroup] = useState<CustomerGroup | null>(null);
   const [editQty, setEditQty] = useState<Record<string, string>>({});
   const [editFreq, setEditFreq] = useState<Record<string, 'weekly' | 'biweekly'>>({});
+  const [editSwap, setEditSwap] = useState<Record<string, string>>({}); // lineId → new variant_id
   const [submitting, setSubmitting] = useState(false);
   const [pausingId, setPausingId] = useState<string | null>(null);
 
@@ -115,25 +116,26 @@ export default function OrdersPage() {
         return;
       }
 
-      for (const line of validLines) {
-        const res = await fetch('/api/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customer_id: addCustomerId,
-            product_variant_id: line.product_variant_id,
-            quantity: parseFloat(line.quantity) || 1,
-            recurring: true,
-            frequency: line.frequency || 'weekly',
-          }),
-        });
+      // One request for all lines: the server aligns the whole order's first
+      // delivery to its longest crop, so everything is ready together.
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: addCustomerId,
+          lines: validLines.map(l => ({
+            product_variant_id: l.product_variant_id,
+            quantity: parseFloat(l.quantity) || 1,
+            frequency: l.frequency || 'weekly',
+          })),
+        }),
+      });
 
-        const json = await res.json();
-        if (!json.success) {
-          alert(`Failed: ${json.error}`);
-          setSubmitting(false);
-          return;
-        }
+      const json = await res.json();
+      if (!json.success) {
+        alert(`Failed: ${json.error}`);
+        setSubmitting(false);
+        return;
       }
 
       setShowAddModal(false);
@@ -158,6 +160,7 @@ export default function OrdersPage() {
     });
     setEditQty(qtyMap);
     setEditFreq(freqMap);
+    setEditSwap({});
   };
 
   const handleSaveEdit = async () => {
@@ -168,7 +171,23 @@ export default function OrdersPage() {
         const newQty = parseFloat(editQty[line.id]);
         const newFreq = editFreq[line.id] || 'weekly';
         const freqChanged = newFreq !== ((line as any).frequency || 'weekly');
-        if ((newQty && newQty !== line.quantity) || freqChanged) {
+        const swapVariant = editSwap[line.id];
+
+        if (swapVariant && swapVariant !== line.product_variant_id) {
+          // Crop swap: server keeps the old crop's pipeline delivering and
+          // starts the new crop the Tuesday after the old one's last batch.
+          const res = await fetch(`/api/orders/${line.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              swap_to_variant_id: swapVariant,
+              quantity: newQty || line.quantity,
+              frequency: newFreq,
+            }),
+          });
+          const json = await res.json();
+          if (json.success && json.message) alert(json.message);
+        } else if ((newQty && newQty !== line.quantity) || freqChanged) {
           await fetch(`/api/orders/${line.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -398,8 +417,25 @@ export default function OrdersPage() {
               ) : editGroup.lines.map(line => (
                 <div key={line.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex-1">
-                    <div className="font-semibold text-gray-900 text-sm">{line.variant?.crop.name_en ?? '—'}</div>
-                    <div className="text-xs text-gray-400">{line.variant?.size_name ?? '—'}</div>
+                    <select
+                      value={editSwap[line.id] || line.product_variant_id}
+                      onChange={e => setEditSwap(prev => ({ ...prev, [line.id]: e.target.value }))}
+                      className="w-full font-semibold text-gray-900 text-sm bg-transparent border border-transparent hover:border-gray-300 rounded-lg px-1 py-1 focus:ring-2 focus:ring-green-500 outline-none cursor-pointer"
+                    >
+                      {!crops.some(c => (c.variants || []).some(v => v.id === line.product_variant_id)) && (
+                        <option value={line.product_variant_id}>
+                          {line.variant?.crop.name_en ?? '—'} · {line.variant?.size_name ?? '—'}
+                        </option>
+                      )}
+                      {crops.map(c => (c.variants || []).map(v => (
+                        <option key={v.id} value={v.id}>{c.name_en} · {v.size_name}</option>
+                      )))}
+                    </select>
+                    {editSwap[line.id] && editSwap[line.id] !== line.product_variant_id && (
+                      <div className="text-xs text-amber-600 font-semibold px-1 mt-0.5">
+                        Swap: current crop keeps delivering until its last batch, then this one takes over
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <input

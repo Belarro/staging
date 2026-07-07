@@ -1,33 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
 import { fetchFromSupabase } from '@/lib/supabase';
-
-// Helper: Calculate seeding date based on schedule
-const calculateSeedingDate = (orderDate: Date, schedule: string = 'FRIDAY'): Date => {
-  const date = new Date(orderDate);
-  const dayOfWeek = date.getDay(); // 0=Sunday, 2=Tuesday, 5=Friday
-
-  const targetDay = schedule === 'TUESDAY' ? 2 : 5;
-  
-  if (dayOfWeek === targetDay) {
-    return date;
-  }
-  
-  const diff = (targetDay + 7 - dayOfWeek) % 7;
-  const result = new Date(date);
-  result.setDate(result.getDate() + diff);
-  return result;
-};
-
-// Helper: Calculate next delivery date (Saturday following harvest)
-const calculateNextDeliveryDate = (harvestDate: Date): Date => {
-  const result = new Date(harvestDate);
-  const dayOfWeek = result.getDay(); // 0=Sunday, 6=Saturday
-  
-  const diff = (6 + 7 - dayOfWeek) % 7;
-  result.setDate(result.getDate() + diff);
-  return result;
-};
+import {
+  alignedFirstDelivery,
+  effectiveGrowDays,
+  firstSeedFor,
+  ymd,
+} from '@/lib/seeding';
 
 export async function GET(request: NextRequest) {
   try {
@@ -110,92 +88,95 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * Create order lines. Accepts a single line or a bulk `lines` array.
+ * All lines posted together form one order event: the FIRST delivery is
+ * aligned to the longest crop in the event, so every crop is ready on the
+ * same Tuesday. Shorter crops seed later (production derives their seed
+ * dates backward from next_delivery_date).
+ */
 export async function POST(request: NextRequest) {
   try {
-    // TODO: Re-enable auth once admin_users table is populated
     // auth handled by middleware
-    // if (!auth.ok) return auth.response;
     const body = await request.json();
-    const { customer_id, product_variant_id, quantity, recurring, frequency } = body;
+    const customer_id = body.customer_id;
+    const lines: Array<{ product_variant_id: string; quantity: number; frequency?: string }> =
+      Array.isArray(body.lines) && body.lines.length > 0
+        ? body.lines
+        : (body.product_variant_id
+            ? [{ product_variant_id: body.product_variant_id, quantity: body.quantity, frequency: body.frequency }]
+            : []);
 
-    if (!customer_id || !product_variant_id || quantity === undefined) {
+    if (!customer_id || lines.length === 0 || lines.some(l => !l.product_variant_id || l.quantity === undefined)) {
       return NextResponse.json(
-        { success: false, error: 'customer_id, product_variant_id, and quantity are required' },
+        { success: false, error: 'customer_id and at least one line with product_variant_id and quantity are required' },
         { status: 400 }
       );
     }
 
-    // Get variant
-    const variant = await fetchFromSupabase(`/belarro_v4_product_variant?id=eq.${product_variant_id}&select=*`);
-    if (!variant || variant.length === 0) {
-      return NextResponse.json({ success: false, error: 'Product variant not found' }, { status: 404 });
+    const [variants, crops, procedures, mixComponents] = await Promise.all([
+      fetchFromSupabase('/belarro_v4_product_variant?select=*'),
+      fetchFromSupabase('/belarro_v4_crop?select=*'),
+      fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,blackout_days,light_days'),
+      fetchFromSupabase('/belarro_v4_crop_mix_component?select=*'),
+    ]);
+    const varMap = new Map<string, any>((variants || []).map((v: any) => [v.id, v]));
+    const cropMap = new Map<string, any>((crops || []).map((c: any) => [c.id, c]));
+    const procMap = new Map<string, any>((procedures || []).map((p: any) => [p.crop_id, p]));
+    const mixComponentsMap = new Map<string, any[]>();
+    for (const mc of (mixComponents || [])) {
+      if (!mixComponentsMap.has(mc.mix_crop_id)) mixComponentsMap.set(mc.mix_crop_id, []);
+      mixComponentsMap.get(mc.mix_crop_id)!.push(mc);
     }
-    const variantData = variant[0];
 
-    // Get growth procedure to calculate total growth days
-    const procedure = await fetchFromSupabase(`/belarro_v4_growth_procedure?crop_id=eq.${variantData.crop_id}&select=*`);
-    
-    let growthDays = 10; // Default fallback
-    if (procedure && procedure.length > 0) {
-      const p = procedure[0];
-      const lightsDays = p.light_enabled ? (p.light_days || 0) : 0;
-      let envDays = 0;
-      if (lightsDays > 0) {
-        envDays = lightsDays;
-      } else if (p.blackout_enabled && p.blackout_days) {
-        envDays = p.blackout_days;
-      } else {
-        envDays = p.growth_env_days || 0;
+    // Longest crop across the whole event sets the first delivery Tuesday.
+    let maxGrowDays = 0;
+    for (const line of lines) {
+      const variant = varMap.get(line.product_variant_id);
+      if (!variant) {
+        return NextResponse.json({ success: false, error: `Product variant not found: ${line.product_variant_id}` }, { status: 404 });
       }
-      growthDays = (p.stack_enabled ? (p.stack_days || 0) : 0) + envDays;
+      const crop = cropMap.get(variant.crop_id);
+      const days = effectiveGrowDays(crop, procMap, mixComponentsMap);
+      if (days > maxGrowDays) maxGrowDays = days;
     }
+    if (maxGrowDays === 0) maxGrowDays = 10;
 
     const orderDate = new Date();
-    // Default schedule to Friday for now
-    const seedingDate = calculateSeedingDate(orderDate, 'FRIDAY');
-    const harvestDate = new Date(seedingDate);
-    harvestDate.setDate(harvestDate.getDate() + growthDays);
-    const nextDeliveryDate = calculateNextDeliveryDate(harvestDate);
+    const firstDelivery = alignedFirstDelivery(orderDate, maxGrowDays);
 
-    const orderId = crypto.randomUUID();
+    const created: any[] = [];
+    for (const line of lines) {
+      const variant = varMap.get(line.product_variant_id);
+      const crop = cropMap.get(variant.crop_id);
+      const growDays = effectiveGrowDays(crop, procMap, mixComponentsMap) || 10;
+      const firstSeed = firstSeedFor(firstDelivery, growDays);
+      const harvest = new Date(firstSeed);
+      harvest.setDate(harvest.getDate() + growDays);
 
-    const newOrder = await fetchFromSupabase('/belarro_v4_order', {
-      method: 'POST',
-      body: JSON.stringify({
-        id: orderId,
-        customer_id,
-        product_variant_id,
-        quantity: parseFloat(quantity),
-        order_date: orderDate.toISOString(),
-        expected_harvest_date: harvestDate.toISOString(),
-        next_delivery_date: nextDeliveryDate.toISOString(),
-        status: 'active',
-        recurring: true,
-        frequency: frequency === 'biweekly' ? 'biweekly' : 'weekly'
-      })
-    });
-
-    // Attempt to deduct from seed inventory (if it exists)
-    try {
-      const seedInv = await fetchFromSupabase(`/belarro_v4_seed_inventory?crop_id=eq.${variantData.crop_id}&select=*`);
-      if (seedInv && seedInv.length > 0) {
-        const inv = seedInv[0];
-        const seedsNeeded = parseFloat(quantity) * 60; // 60g per tray default
-        await fetchFromSupabase(`/belarro_v4_seed_inventory?id=eq.${inv.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            quantity_grams: Math.max(0, inv.quantity_grams - seedsNeeded)
-          })
-        });
-      }
-    } catch (invErr) {
-      console.warn('Inventory deduction skipped:', invErr);
+      const orderId = crypto.randomUUID();
+      const newOrder = await fetchFromSupabase('/belarro_v4_order', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: orderId,
+          customer_id,
+          product_variant_id: line.product_variant_id,
+          quantity: parseFloat(String(line.quantity)),
+          order_date: orderDate.toISOString(),
+          expected_harvest_date: `${ymd(harvest)}T00:00:00+02:00`,
+          next_delivery_date: `${ymd(firstDelivery)}T00:00:00+02:00`,
+          status: 'active',
+          recurring: true,
+          frequency: line.frequency === 'biweekly' ? 'biweekly' : 'weekly',
+        }),
+      });
+      created.push(newOrder ? newOrder[0] : { id: orderId, customer_id, product_variant_id: line.product_variant_id });
     }
 
     return NextResponse.json({
       success: true,
-      data: newOrder ? newOrder[0] : { id: orderId, customer_id, product_variant_id, quantity },
-      message: 'Order created successfully'
+      data: created.length === 1 ? created[0] : created,
+      message: 'Order created successfully',
     });
   } catch (error) {
     console.error('Order POST error:', error);
