@@ -7,8 +7,34 @@ import { signSession } from '@/lib/session';
 
 const PASSWORD_HASH_UPGRADE_ENABLED = true;
 
+// Best-effort in-memory brute-force limiter (resets on cold start).
+const MAX_ATTEMPTS = 10;
+const WINDOW_MS = 15 * 60 * 1000;
+const attempts = new Map<string, number[]>();
+
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const arr = (attempts.get(ip) || []).filter((t) => now - t < WINDOW_MS);
+  if (arr.length >= MAX_ATTEMPTS) {
+    attempts.set(ip, arr);
+    return true;
+  }
+  arr.push(now);
+  attempts.set(ip, arr);
+  return false;
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim()
+      || request.headers.get('x-real-ip') || 'unknown';
+    if (rateLimited(ip)) {
+      return NextResponse.json(
+        { success: false, error: 'Too many attempts. Try again in 15 minutes.' },
+        { status: 429 }
+      );
+    }
+
     const { email, password } = await request.json();
 
     if (!email || !password) {

@@ -5,7 +5,9 @@ const PUBLIC_ROUTES = ['/login', '/'];
 // send-followup-email is whitelisted here but does its own auth inside the
 // route (admin session cookie OR x-sync-secret) so the SalesTracker phone
 // app can call it cross-origin without a browser session.
-const PUBLIC_API = ['/api/auth/login', '/api/contact', '/api/website-leads', '/api/sync-sales-tracker', '/api/sync-prospect', '/api/send-followup-email'];
+// NOTE: /api/website-leads is admin-only (lists/edits lead PII) — the public
+// website submits through /api/contact, which creates the lead row itself.
+const PUBLIC_API = ['/api/auth/login', '/api/contact', '/api/sync-sales-tracker', '/api/sync-prospect', '/api/send-followup-email'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
