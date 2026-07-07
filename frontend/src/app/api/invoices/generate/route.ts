@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-// import removed
-
-function isoWeek(d: Date): number {
-  const tmp = new Date(d);
-  tmp.setHours(0, 0, 0, 0);
-  tmp.setDate(tmp.getDate() + 3 - ((tmp.getDay() + 6) % 7));
-  const week1 = new Date(tmp.getFullYear(), 0, 4);
-  return 1 + Math.round(((tmp.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-}
+import { deliversOnTuesday, nextTuesdayOnOrAfter } from '@/lib/seeding';
 
 // All Tuesdays in a given YYYY-MM
 function tuesdaysInMonth(year: number, month: number): Date[] {
@@ -72,8 +64,17 @@ export async function GET(request: NextRequest) {
         const unitPrice = variant.price_eur ?? 0;
         const qty = order.quantity || 1;
 
+        // Only bill Tuesdays the line has actually started delivering on.
+        // next_delivery_date is the line's first delivery (set at order
+        // creation/swap, aligned to the order's longest crop) — a line with
+        // no deliveries yet this month must not appear on the invoice.
+        const firstDelivery = order.next_delivery_date
+          ? nextTuesdayOnOrAfter(new Date(order.next_delivery_date))
+          : null;
+        if (!firstDelivery) continue;
+
         for (const tuesday of tuesdays) {
-          if (order.frequency === 'biweekly' && isoWeek(tuesday) % 2 !== 0) continue;
+          if (!deliversOnTuesday(tuesday, firstDelivery, order.frequency)) continue;
 
           lines.push({
             id: `${order.id}-${tuesday.toISOString().split('T')[0]}`,
