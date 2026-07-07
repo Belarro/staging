@@ -53,8 +53,9 @@ export async function GET(request: NextRequest) {
     // auth handled by middleware
     // if (!auth.ok) return auth.response;
 
-    const [orders, variants, crops, procedures, customers, batches, harvests, mixComponents] = await Promise.all([
-      fetchFromSupabase('/belarro_v4_order?status=in.(active,pending_seed,growing)&deleted_at=is.null&select=*'),
+    const [standingOrders, standingItems, variants, crops, procedures, customers, batches, harvests, mixComponents] = await Promise.all([
+      fetchFromSupabase('/belarro_v4_standing_order?status=eq.active&select=*'),
+      fetchFromSupabase('/belarro_v4_standing_order_item?select=*'),
       fetchFromSupabase('/belarro_v4_product_variant?select=*'),
       fetchFromSupabase('/belarro_v4_crop?select=*'),
       fetchFromSupabase('/belarro_v4_growth_procedure?select=crop_id,stack_days,blackout_days,light_days'),
@@ -126,79 +127,88 @@ export async function GET(request: NextRequest) {
     // delivery schedule: per customer
     const customerDeliveryMap = new Map<string, { harvest_date: string; harvest_display: string; customer_name: string; items: any[] }>();
 
-    for (const order of (orders || [])) {
-      if (order.frequency === 'biweekly' && thisWeekNum % 2 !== 0) continue;
+    // Map standing order items by standing_order_id
+    const itemsByOrder = new Map<string, any[]>();
+    for (const item of (standingItems || [])) {
+      const arr = itemsByOrder.get(item.standing_order_id) || [];
+      arr.push(item);
+      itemsByOrder.set(item.standing_order_id, arr);
+    }
 
+    for (const order of (standingOrders || [])) {
       const customer = custMap.get(order.customer_id);
       if (!customer?.name) continue;
 
-      const variant = varMap.get(order.product_variant_id);
-      const crop = variant ? cropMap.get(variant.crop_id) : null;
-      if (!crop) continue;
+      const items = itemsByOrder.get(order.id) || [];
+      for (const item of items) {
+        const variant = varMap.get(item.variant_id);
+        const crop = variant ? cropMap.get(variant.crop_id) : null;
+        if (!crop) continue;
 
-      const orderQty = order.quantity || 1;
-      const sizeGrams = variant?.size_grams || 0;
-      const totalGrams = orderQty * sizeGrams;
+        const orderQty = item.quantity || 1;
+        const sizeGrams = variant?.size_grams || 0;
+        const totalGrams = orderQty * sizeGrams;
 
-      if (crop.is_mix) {
-        // Expand mix into component crops
-        const components = mixComponentsMap.get(crop.id) || [];
-        for (const comp of components) {
-          const gramsForComp = totalGrams * (comp.percentage / 100);
-          addGrams(comp.component_crop_id, gramsForComp);
+        if (crop.is_mix) {
+          // Expand mix into component crops
+          const components = mixComponentsMap.get(crop.id) || [];
+          for (const comp of components) {
+            const gramsForComp = totalGrams * (comp.percentage / 100);
+            addGrams(comp.component_crop_id, gramsForComp);
+          }
+        } else {
+          addGrams(crop.id, totalGrams);
         }
-      } else {
-        addGrams(crop.id, totalGrams);
-      }
 
-      // Delivery tab — use the mix crop's grow days for harvest date estimation
-      // For mixes, use the longest component grow days
-      let growDaysForDelivery = 0;
-      if (crop.is_mix) {
-        const components = mixComponentsMap.get(crop.id) || [];
-        for (const comp of components) {
-          const compProc = procMap.get(comp.component_crop_id);
-          const compDays = compProc
-            ? (compProc.stack_days || 0) + (compProc.blackout_days || 0) + (compProc.light_days || 0)
+        // Delivery tab — use the mix crop's grow days for harvest date estimation
+        // For mixes, use the longest component grow days
+        let growDaysForDelivery = 0;
+        if (crop.is_mix) {
+          const components = mixComponentsMap.get(crop.id) || [];
+          for (const comp of components) {
+            const compProc = procMap.get(comp.component_crop_id);
+            const compDays = compProc
+              ? (compProc.stack_days || 0) + (compProc.blackout_days || 0) + (compProc.light_days || 0)
+              : 0;
+            if (compDays > growDaysForDelivery) growDaysForDelivery = compDays;
+          }
+        } else {
+          const proc = procMap.get(crop.id);
+          growDaysForDelivery = proc
+            ? (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0)
             : 0;
-          if (compDays > growDaysForDelivery) growDaysForDelivery = compDays;
         }
-      } else {
-        const proc = procMap.get(crop.id);
-        growDaysForDelivery = proc
-          ? (proc.stack_days || 0) + (proc.blackout_days || 0) + (proc.light_days || 0)
-          : 0;
-      }
 
-      const seedDayTarget = growDaysForDelivery > 10 ? TUESDAY : FRIDAY;
-      const seedDate = nextDayOnOrAfter(today, seedDayTarget);
-      const harvestRaw = new Date(seedDate);
-      harvestRaw.setDate(harvestRaw.getDate() + (growDaysForDelivery || 10));
-      const harvestTuesday = nextTuesdayOnOrAfter(harvestRaw);
-      const harvestKey = ymd(harvestTuesday);
+        const seedDayTarget = growDaysForDelivery > 10 ? TUESDAY : FRIDAY;
+        const seedDate = nextDayOnOrAfter(today, seedDayTarget);
+        const harvestRaw = new Date(seedDate);
+        harvestRaw.setDate(harvestRaw.getDate() + (growDaysForDelivery || 10));
+        const harvestTuesday = nextTuesdayOnOrAfter(harvestRaw);
+        const harvestKey = ymd(harvestTuesday);
 
-      if (!customerDeliveryMap.has(order.customer_id)) {
-        customerDeliveryMap.set(order.customer_id, {
-          harvest_date: harvestKey,
-          harvest_display: fmt(harvestTuesday),
-          customer_name: customer.name,
-          items: [],
+        if (!customerDeliveryMap.has(order.customer_id)) {
+          customerDeliveryMap.set(order.customer_id, {
+            harvest_date: harvestKey,
+            harvest_display: fmt(harvestTuesday),
+            customer_name: customer.name,
+            items: [],
+          });
+        }
+        const delivery = customerDeliveryMap.get(order.customer_id)!;
+        if (harvestKey > delivery.harvest_date) {
+          delivery.harvest_date = harvestKey;
+          delivery.harvest_display = fmt(harvestTuesday);
+        }
+        const yieldPerTray = crop.yield_per_tray_grams || null;
+        const traysNeeded = yieldPerTray && totalGrams > 0 ? Math.ceil(totalGrams / yieldPerTray) : orderQty;
+        delivery.items.push({
+          crop_name: crop.name_en,
+          order_qty: orderQty,
+          size_name: variant?.size_name || '',
+          size_grams: sizeGrams,
+          trays_needed: traysNeeded,
         });
       }
-      const delivery = customerDeliveryMap.get(order.customer_id)!;
-      if (harvestKey > delivery.harvest_date) {
-        delivery.harvest_date = harvestKey;
-        delivery.harvest_display = fmt(harvestTuesday);
-      }
-      const yieldPerTray = crop.yield_per_tray_grams || null;
-      const traysNeeded = yieldPerTray && totalGrams > 0 ? Math.ceil(totalGrams / yieldPerTray) : orderQty;
-      delivery.items.push({
-        crop_name: crop.name_en,
-        order_qty: orderQty,
-        size_name: variant?.size_name || '',
-        size_grams: sizeGrams,
-        trays_needed: traysNeeded,
-      });
     }
 
     // Step 2: for each crop with grams needed, calculate trays and seed day
@@ -266,30 +276,32 @@ export async function GET(request: NextRequest) {
         const p = procMap.get(cropId);
         return p ? (p.stack_days || 0) + (p.blackout_days || 0) + (p.light_days || 0) : 0;
       };
-      for (const order of (orders || [])) {
-        if (order.frequency === 'biweekly' && weekNum % 2 !== 0) continue;
-        const variant = varMap.get(order.product_variant_id);
-        const crop = variant ? cropMap.get(variant.crop_id) : null;
-        if (!crop) continue;
-        const orderQty = order.quantity || 1;
-        const sizeGrams = variant?.size_grams || 0;
-        const totalGrams = orderQty * sizeGrams;
-        // Mixes have no procedure of their own — expand into components and
-        // bucket each component by ITS OWN grow days (Tue=long, Fri=short).
-        if (crop.is_mix) {
-          for (const comp of (mixComponentsMap.get(crop.id) || [])) {
-            const compGrowDays = growDaysOf(comp.component_crop_id);
-            if (compGrowDays === 0) continue;
-            const belongsHere = day === 'Tuesday' ? compGrowDays > 10 : compGrowDays <= 10;
+      for (const order of (standingOrders || [])) {
+        const items = itemsByOrder.get(order.id) || [];
+        for (const item of items) {
+          const variant = varMap.get(item.variant_id);
+          const crop = variant ? cropMap.get(variant.crop_id) : null;
+          if (!crop) continue;
+          const orderQty = item.quantity || 1;
+          const sizeGrams = variant?.size_grams || 0;
+          const totalGrams = orderQty * sizeGrams;
+          // Mixes have no procedure of their own — expand into components and
+          // bucket each component by ITS OWN grow days (Tue=long, Fri=short).
+          if (crop.is_mix) {
+            for (const comp of (mixComponentsMap.get(crop.id) || [])) {
+              const compGrowDays = growDaysOf(comp.component_crop_id);
+              if (compGrowDays === 0) continue;
+              const belongsHere = day === 'Tuesday' ? compGrowDays > 10 : compGrowDays <= 10;
+              if (!belongsHere) continue;
+              gramsForWeek.set(comp.component_crop_id, (gramsForWeek.get(comp.component_crop_id) || 0) + totalGrams * (comp.percentage / 100));
+            }
+          } else {
+            const growDays = growDaysOf(crop.id);
+            if (growDays === 0) continue;
+            const belongsHere = day === 'Tuesday' ? growDays > 10 : growDays <= 10;
             if (!belongsHere) continue;
-            gramsForWeek.set(comp.component_crop_id, (gramsForWeek.get(comp.component_crop_id) || 0) + totalGrams * (comp.percentage / 100));
+            gramsForWeek.set(crop.id, (gramsForWeek.get(crop.id) || 0) + totalGrams);
           }
-        } else {
-          const growDays = growDaysOf(crop.id);
-          if (growDays === 0) continue;
-          const belongsHere = day === 'Tuesday' ? growDays > 10 : growDays <= 10;
-          if (!belongsHere) continue;
-          gramsForWeek.set(crop.id, (gramsForWeek.get(crop.id) || 0) + totalGrams);
         }
       }
       const items = Array.from(gramsForWeek.entries())
