@@ -12,6 +12,28 @@ import {
 
 const SYNC_SECRET = process.env.SALETRACKER_SYNC_SECRET || '';
 
+// Sales Tracker is a separate origin (Vercel project "sales-tracker") calling
+// this route directly from the browser with a custom x-sync-secret header,
+// which triggers a CORS preflight. Without these headers the browser blocks
+// the request before our code ever runs ("Failed to fetch" in the console).
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  if (origin === (process.env.SALETRACKER_URL || 'https://sales.belarro.com')) return true;
+  if (/^https:\/\/sales-tracker[a-z0-9.-]*\.vercel\.app$/.test(origin)) return true;
+  if (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
+  return false;
+}
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const allow = isAllowedOrigin(origin) ? origin! : '';
+  return {
+    'Access-Control-Allow-Origin': allow,
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, x-sync-secret',
+    'Vary': 'Origin',
+  };
+}
+
 /**
  * GET /api/deliveries/due?date=YYYY-MM-DD (defaults to next Tuesday on/after today)
  *
@@ -23,7 +45,14 @@ const SYNC_SECRET = process.env.SALETRACKER_SYNC_SECRET || '';
  * Auth: admin session cookie (browser) OR x-sync-secret header (Sales Tracker
  * app, which writes to Supabase directly and doesn't hold an admin session).
  */
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  return new NextResponse(null, { status: 204, headers: corsHeaders(origin) });
+}
+
 export async function GET(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  const headers = corsHeaders(origin);
   try {
     const headerSecret = request.headers.get('x-sync-secret');
     const hasSecret = !!SYNC_SECRET && headerSecret === SYNC_SECRET;
@@ -32,7 +61,7 @@ export async function GET(request: NextRequest) {
     // a valid session or this route being explicitly public. We require one
     // of the two explicitly since this route also carries pricing data.
     if (!hasSecret && !request.cookies.get('belarro_session')?.value) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401, headers });
     }
 
     const { searchParams } = new URL(request.url);
@@ -145,12 +174,12 @@ export async function GET(request: NextRequest) {
 
     const result = Array.from(byCustomer.values()).sort((a, b) => a.customer_name.localeCompare(b.customer_name));
 
-    return NextResponse.json({ success: true, data: result, date: targetKey });
+    return NextResponse.json({ success: true, data: result, date: targetKey }, { headers });
   } catch (error) {
     console.error('Deliveries due GET error:', error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: 500, headers }
     );
   }
 }

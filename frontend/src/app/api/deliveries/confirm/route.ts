@@ -3,6 +3,26 @@ import { fetchFromSupabase } from '@/lib/supabase';
 
 const SYNC_SECRET = process.env.SALETRACKER_SYNC_SECRET || '';
 
+// See due/route.ts — same cross-origin browser call from Sales Tracker,
+// same CORS requirement (no headers = "Failed to fetch" before our code runs).
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  if (origin === (process.env.SALETRACKER_URL || 'https://sales.belarro.com')) return true;
+  if (/^https:\/\/sales-tracker[a-z0-9.-]*\.vercel\.app$/.test(origin)) return true;
+  if (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
+  return false;
+}
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const allow = isAllowedOrigin(origin) ? origin! : '';
+  return {
+    'Access-Control-Allow-Origin': allow,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, x-sync-secret',
+    'Vary': 'Origin',
+  };
+}
+
 /**
  * POST /api/deliveries/confirm
  * body: { order_id, delivery_date (YYYY-MM-DD), status: 'delivered'|'adjusted'|'not_delivered',
@@ -18,12 +38,19 @@ const SYNC_SECRET = process.env.SALETRACKER_SYNC_SECRET || '';
  * Auth: admin session cookie (browser) OR x-sync-secret header (Sales Tracker
  * app — same shared-secret pattern as /api/sync-sales-tracker).
  */
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  return new NextResponse(null, { status: 204, headers: corsHeaders(origin) });
+}
+
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  const headers = corsHeaders(origin);
   try {
     const headerSecret = request.headers.get('x-sync-secret');
     const hasSecret = !!SYNC_SECRET && headerSecret === SYNC_SECRET;
     if (!hasSecret && !request.cookies.get('belarro_session')?.value) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401, headers });
     }
 
     const body = await request.json();
@@ -32,16 +59,16 @@ export async function POST(request: NextRequest) {
     if (!order_id || !delivery_date || !status) {
       return NextResponse.json(
         { success: false, error: 'order_id, delivery_date, and status are required' },
-        { status: 400 }
+        { status: 400, headers }
       );
     }
     if (!['delivered', 'adjusted', 'not_delivered'].includes(status)) {
-      return NextResponse.json({ success: false, error: 'Invalid status' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Invalid status' }, { status: 400, headers });
     }
 
     const order = await fetchFromSupabase(`/belarro_v4_order?id=eq.${order_id}&select=*`);
     if (!order || order.length === 0) {
-      return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404, headers });
     }
     const orderData = order[0];
 
@@ -51,7 +78,7 @@ export async function POST(request: NextRequest) {
     ]);
     const variantData = variant?.[0];
     if (!customer || customer.length === 0) {
-      return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404, headers });
     }
     let cropName = 'Unknown';
     if (variantData) {
@@ -97,12 +124,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, data: saved ? saved[0] : row });
+    return NextResponse.json({ success: true, data: saved ? saved[0] : row }, { headers });
   } catch (error) {
     console.error('Deliveries confirm POST error:', error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: 500, headers }
     );
   }
 }
