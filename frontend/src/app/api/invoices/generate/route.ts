@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFromSupabase } from '@/lib/supabase';
-import { deliversOnTuesday, nextTuesdayOnOrAfter } from '@/lib/seeding';
+import { deliversOnTuesday, localMidnight, nextTuesdayOnOrAfter, ymd } from '@/lib/seeding';
 
 // All Tuesdays in a given YYYY-MM
 function tuesdaysInMonth(year: number, month: number): Date[] {
@@ -14,12 +14,25 @@ function tuesdaysInMonth(year: number, month: number): Date[] {
   return tuesdays;
 }
 
+/**
+ * Invoices are split at "today":
+ *
+ * - Tuesdays <= today read belarro_v4_delivery — the immutable ledger written
+ *   when a delivery is confirmed in Sales Tracker. Only rows that actually
+ *   exist there appear; a line the customer hasn't received yet (because the
+ *   order was just placed/edited) shows nothing, and 'not_delivered' rows are
+ *   excluded from billing. Editing an order today can NEVER change what an
+ *   already-confirmed past Tuesday billed, because that Tuesday's rows are
+ *   already in the ledger and this code doesn't touch them.
+ *
+ * - Tuesdays > today have no delivery yet by definition, so they're a
+ *   forward-looking PREDICTION built from the current live order config
+ *   (same math as /api/production). Each such line is flagged `predicted:
+ *   true` so the UI can mark it clearly as not-yet-real.
+ */
 export async function GET(request: NextRequest) {
   try {
-    // For now, skip auth check — rely on deployment being private
-    // TODO: restore session-based auth once cookie handling is fixed on Vercel
     // auth handled by middleware
-    // if (!auth.ok) return auth.response;
 
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month'); // YYYY-MM
@@ -29,57 +42,89 @@ export async function GET(request: NextRequest) {
 
     const [year, mon] = month.split('-').map(Number);
     const tuesdays = tuesdaysInMonth(year, mon);
+    const today = localMidnight(new Date());
+    const pastTuesdays = tuesdays.filter(t => t.getTime() <= today.getTime());
+    const futureTuesdays = tuesdays.filter(t => t.getTime() > today.getTime());
 
-    const [orders, variants, crops, customers] = await Promise.all([
+    const [orders, variants, crops, customers, deliveries] = await Promise.all([
       fetchFromSupabase('/belarro_v4_order?deleted_at=is.null&select=*').catch((e: any) => { throw new Error('orders: ' + e.message); }),
       fetchFromSupabase('/belarro_v4_product_variant?select=*').catch((e: any) => { throw new Error('variants: ' + e.message); }),
       fetchFromSupabase('/belarro_v4_crop?select=id,name_en&deleted_at=is.null').catch((e: any) => { throw new Error('crops: ' + e.message); }),
       fetchFromSupabase('/belarro_v4_customer?select=id,name,restaurant_name,email,address').catch((e: any) => { throw new Error('customers: ' + e.message); }),
+      pastTuesdays.length > 0
+        ? fetchFromSupabase(
+            `/belarro_v4_delivery?delivery_date=gte.${ymd(pastTuesdays[0])}&delivery_date=lte.${ymd(pastTuesdays[pastTuesdays.length - 1])}&deleted_at=is.null&select=*`
+          ).catch((e: any) => { throw new Error('deliveries: ' + e.message); })
+        : Promise.resolve([]),
     ]);
 
     const varMap = new Map<string, any>((variants || []).map((v: any) => [v.id, v]));
     const cropMap = new Map<string, any>((crops || []).map((c: any) => [c.id, c]));
     const custMap = new Map<string, any>((customers || []).map((c: any) => [c.id, c]));
 
-    // Group orders by customer — include even if customer not in custMap (fetch all customers without deleted_at filter as fallback)
-    const byCustomer = new Map<string, any[]>();
+    // Group orders by customer (for the future/predicted portion)
+    const ordersByCustomer = new Map<string, any[]>();
     for (const order of (orders || [])) {
-      if (!byCustomer.has(order.customer_id)) byCustomer.set(order.customer_id, []);
-      byCustomer.get(order.customer_id)!.push(order);
+      if (!ordersByCustomer.has(order.customer_id)) ordersByCustomer.set(order.customer_id, []);
+      ordersByCustomer.get(order.customer_id)!.push(order);
     }
 
-    const invoices = Array.from(byCustomer.entries()).map(([customerId, custOrders]) => {
+    // Group confirmed deliveries by customer (ground truth for the past)
+    const deliveriesByCustomer = new Map<string, any[]>();
+    for (const d of (deliveries || [])) {
+      if (!deliveriesByCustomer.has(d.customer_id)) deliveriesByCustomer.set(d.customer_id, []);
+      deliveriesByCustomer.get(d.customer_id)!.push(d);
+    }
+
+    const customerIds = new Set<string>([...ordersByCustomer.keys(), ...deliveriesByCustomer.keys()]);
+
+    const invoices = Array.from(customerIds).map((customerId) => {
       const customer = custMap.get(customerId);
       if (!customer) return null;
       const customerName = customer.restaurant_name || customer.name || 'Unknown';
 
-      // Build line items: one per order per applicable Tuesday
       const lines: any[] = [];
 
-      for (const order of custOrders) {
+      // Past: ground truth from the ledger. Skipped deliveries aren't billed.
+      for (const d of (deliveriesByCustomer.get(customerId) || [])) {
+        if (d.status === 'not_delivered') continue;
+        const qty = d.actual_qty ?? d.expected_qty ?? 1;
+        lines.push({
+          id: `${d.order_id}-${d.delivery_date}`,
+          order_id: d.order_id,
+          delivery_date: d.delivery_date,
+          crop_name: d.crop_name,
+          size_name: d.size_name,
+          qty,
+          unit_price: d.unit_price_eur ?? 0,
+          line_total: +(qty * (d.unit_price_eur ?? 0)).toFixed(2),
+          removed: false,
+          qty_override: null as number | null,
+          predicted: false,
+          delivery_status: d.status,
+        });
+      }
+
+      // Future: prediction from current live order config.
+      for (const order of (ordersByCustomer.get(customerId) || [])) {
         const variant = varMap.get(order.product_variant_id);
         const crop = variant ? cropMap.get(variant.crop_id) : null;
         if (!variant || !crop) continue;
 
         const unitPrice = variant.price_eur ?? 0;
         const qty = order.quantity || 1;
-
-        // Only bill Tuesdays the line has actually started delivering on.
-        // next_delivery_date is the line's first delivery (set at order
-        // creation/swap, aligned to the order's longest crop) — a line with
-        // no deliveries yet this month must not appear on the invoice.
         const firstDelivery = order.next_delivery_date
           ? nextTuesdayOnOrAfter(new Date(order.next_delivery_date))
           : null;
         if (!firstDelivery) continue;
 
-        for (const tuesday of tuesdays) {
+        for (const tuesday of futureTuesdays) {
           if (!deliversOnTuesday(tuesday, firstDelivery, order.frequency)) continue;
 
           lines.push({
-            id: `${order.id}-${tuesday.toISOString().split('T')[0]}`,
+            id: `${order.id}-${ymd(tuesday)}`,
             order_id: order.id,
-            delivery_date: tuesday.toISOString().split('T')[0],
+            delivery_date: ymd(tuesday),
             crop_name: crop.name_en,
             size_name: variant.size_name,
             qty,
@@ -87,6 +132,7 @@ export async function GET(request: NextRequest) {
             line_total: +(qty * unitPrice).toFixed(2),
             removed: false,
             qty_override: null as number | null,
+            predicted: true,
           });
         }
       }
@@ -113,12 +159,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: invoices,
-      tuesdays: tuesdays.map(t => t.toISOString().split('T')[0]),
+      tuesdays: tuesdays.map(t => ymd(t)),
       _debug: {
         order_count: (orders || []).length,
         variant_count: (variants || []).length,
         crop_count: (crops || []).length,
         customer_count: (customers || []).length,
+        delivery_ledger_rows: (deliveries || []).length,
         invoices_generated: invoices.length,
       }
     });

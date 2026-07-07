@@ -14,6 +14,8 @@ interface InvoiceLine {
   removed: boolean;
   qty_override: number | null;
   manual?: boolean;
+  predicted?: boolean;
+  delivery_status?: 'delivered' | 'adjusted' | 'not_delivered';
 }
 
 interface CropOption {
@@ -389,6 +391,12 @@ export default function InvoicesPage() {
                                       {line.crop_name}
                                       {line.size_name && <span className="text-gray-400 text-xs ml-1">({line.size_name})</span>}
                                       {line.manual && <span className="ml-1 text-[10px] text-green-600 font-semibold">manual</span>}
+                                      {line.predicted && (
+                                        <span className="ml-1 text-[10px] text-amber-600 font-semibold" title="Not delivered yet — projected from the current order">predicted</span>
+                                      )}
+                                      {line.delivery_status === 'adjusted' && (
+                                        <span className="ml-1 text-[10px] text-blue-600 font-semibold" title="Actual quantity differed from the order">adjusted</span>
+                                      )}
                                     </td>
                                     <td className="px-2 py-2.5 text-center">
                                       <input

@@ -7,7 +7,10 @@ const PUBLIC_ROUTES = ['/login', '/'];
 // app can call it cross-origin without a browser session.
 // NOTE: /api/website-leads is admin-only (lists/edits lead PII) — the public
 // website submits through /api/contact, which creates the lead row itself.
-const PUBLIC_API = ['/api/auth/login', '/api/contact', '/api/sync-sales-tracker', '/api/sync-prospect', '/api/send-followup-email'];
+// /api/deliveries/* do their own auth inside the route (admin session cookie
+// OR x-sync-secret) so the Sales Tracker app can call them cross-origin
+// without a browser session — same pattern as send-followup-email.
+const PUBLIC_API = ['/api/auth/login', '/api/contact', '/api/sync-sales-tracker', '/api/sync-prospect', '/api/send-followup-email', '/api/deliveries/due', '/api/deliveries/confirm'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
