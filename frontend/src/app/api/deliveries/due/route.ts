@@ -174,7 +174,56 @@ export async function GET(request: NextRequest) {
 
     const result = Array.from(byCustomer.values()).sort((a, b) => a.customer_name.localeCompare(b.customer_name));
 
-    return NextResponse.json({ success: true, data: result, date: targetKey }, { headers });
+    // ── UPCOMING ─────────────────────────────────────────────────────
+    // Every active-order customer NOT due on targetDate still needs to show
+    // up somewhere — otherwise the driver sees a customer "vanish" with no
+    // explanation (e.g. an order just realigned to 3 weeks out after an
+    // edit). For each such customer, find their next actual delivery Tuesday
+    // within 8 weeks and summarize what's coming.
+    const linesByCustomer = new Map<string, any[]>();
+    for (const line of lines) {
+      if (!linesByCustomer.has(line.customer_id)) linesByCustomer.set(line.customer_id, []);
+      linesByCustomer.get(line.customer_id)!.push(line);
+    }
+
+    const upcoming: Array<{ customer_id: string; customer_name: string; next_delivery_date: string; crop_names: string[] }> = [];
+    for (const [customerId, customerLines] of linesByCustomer) {
+      if (byCustomer.has(customerId)) continue; // already due today
+      const customer = custMap.get(customerId);
+      if (!customer) continue;
+
+      let earliest: Date | null = null;
+      const cropsOnEarliest = new Set<string>();
+      for (let w = 1; w <= 8; w++) {
+        const candidate = addDays(targetDate, w * 7);
+        for (const line of customerLines) {
+          const firstDelivery = firstDeliveryOf(line, lines);
+          if (!deliversOnTuesday(candidate, firstDelivery, line.frequency)) continue;
+          if (!earliest || candidate.getTime() < earliest.getTime()) {
+            earliest = candidate;
+            cropsOnEarliest.clear();
+          }
+          if (earliest && candidate.getTime() === earliest.getTime()) {
+            const variant = varMap.get(line.product_variant_id);
+            const crop = variant ? cropMap.get(variant.crop_id) : null;
+            cropsOnEarliest.add(crop?.name_en || 'Unknown');
+          }
+        }
+        if (earliest) break; // first week with any match is the earliest (weeks ascend)
+      }
+
+      if (earliest) {
+        upcoming.push({
+          customer_id: customerId,
+          customer_name: customer.restaurant_name || customer.name,
+          next_delivery_date: ymd(earliest),
+          crop_names: Array.from(cropsOnEarliest),
+        });
+      }
+    }
+    upcoming.sort((a, b) => a.next_delivery_date.localeCompare(b.next_delivery_date) || a.customer_name.localeCompare(b.customer_name));
+
+    return NextResponse.json({ success: true, data: result, upcoming, date: targetKey }, { headers });
   } catch (error) {
     console.error('Deliveries due GET error:', error);
     return NextResponse.json(
