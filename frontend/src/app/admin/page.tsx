@@ -10,6 +10,7 @@ interface DashboardData {
     active_customers: number;
     total_customers: number;
     active_orders: number;
+    total_visits: number;
   };
   this_month: {
     label: string;
@@ -116,6 +117,15 @@ export default function Dashboard() {
           <div className="text-2xl font-extrabold text-amber-600 mt-2">€{data.next_delivery.revenue.toFixed(2)}</div>
           <div className="text-xs text-gray-500 mt-4">
             {fmtDate(data.next_delivery.date)} · {data.next_delivery.packages} packages
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col justify-between shadow-sm">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Places Visited</span>
+          <div className="text-4xl font-extrabold text-teal-600 mt-2">{data.overview.total_visits}</div>
+          <div className="text-xs text-gray-500 mt-4 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-teal-500 inline-block" />
+            total logged visits
           </div>
         </div>
       </div>

@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     // Stages where follow-ups must stop: became a client (active/closed_won),
     // explicitly lost, or snoozed. Set either in the admin (convert button)
     // or in the sales tracker (closed_won/closed_lost).
-    const STOPPED_STAGES = new Set(['active', 'snoozed', 'closed_won', 'closed_lost', 'converted']);
+    const STOPPED_STAGES = new Set(['active', 'snoozed', 'closed_won', 'closed_lost', 'converted', 'not_interested']);
 
     // Only keep next pending follow-up per location
     const nextPerLocation = new Map<string, any>();

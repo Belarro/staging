@@ -93,6 +93,9 @@ const STAGE_LABELS: Record<string, string> = {
   active: 'Active Customer',
   snoozed: 'Snoozed',
   converted: 'Converted',
+  not_interested: 'Not Interested',
+  closed_lost: 'Closed Lost',
+  closed_won: 'Closed Won',
 };
 
 export default function FollowUpsPage() {
@@ -102,6 +105,10 @@ export default function FollowUpsPage() {
   const [visitsError, setVisitsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'today' | 'pending' | 'done' | 'warm' | 'visits'>('today');
+  const [visitFilter, setVisitFilter] = useState<'all' | 'not_interested' | 'active'>('all');
+  const [reapproachId, setReapproachId] = useState<string | null>(null);
+  const [reapproaching, setReapproaching] = useState(false);
+  const [reapproachSuccess, setReapproachSuccess] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<FollowUp | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -207,6 +214,15 @@ export default function FollowUpsPage() {
   const displayed = activeTab === 'today' ? today : activeTab === 'pending' ? upcoming : activeTab === 'warm' ? warm : done;
   const isLocked = activeTab === 'pending'; // Upcoming tab — no sending allowed
 
+  // Visits tab filter: All / Not Interested / Active — driven by pipeline_stage
+  // so every not-interested lead is visible in one place without scrolling.
+  const visibleVisits = visits.filter(v => {
+    if (visitFilter === 'not_interested') return v.pipeline_stage === 'not_interested';
+    if (visitFilter === 'active') return v.pipeline_stage && v.pipeline_stage !== 'not_interested';
+    return true;
+  });
+  const notInterestedCount = visits.filter(v => v.pipeline_stage === 'not_interested').length;
+
   const handleLog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selected || submitting) return;
@@ -251,6 +267,28 @@ export default function FollowUpsPage() {
       }
     } finally {
       setConverting(false);
+    }
+  };
+
+  const handleReapproach = async (locationId: string) => {
+    if (reapproaching) return;
+    setReapproaching(true);
+    try {
+      const res = await fetch('/api/locations/re-approach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location_id: locationId }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setReapproachId(null);
+        setReapproachSuccess(locationId);
+        fetchVisits();
+        fetchFollowups();
+        setTimeout(() => setReapproachSuccess(null), 4000);
+      }
+    } finally {
+      setReapproaching(false);
     }
   };
 
@@ -714,78 +752,146 @@ export default function FollowUpsPage() {
             No visits recorded yet.
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  <th className="px-4 py-3">Restaurant</th>
-                  <th className="px-4 py-3">Contact</th>
-                  <th className="px-4 py-3">Rep</th>
-                  <th className="px-4 py-3">Visited</th>
-                  <th className="px-4 py-3">Interest</th>
-                  <th className="px-4 py-3">Stage</th>
-                  <th className="px-4 py-3">Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {visits.map(v => (
-                  <tr
-                    key={v.location_id}
-                    className="hover:bg-gray-50 transition cursor-pointer"
-                    onClick={() => {
-                      const match = followups.find(f => f.location_id === v.location_id && (f.status === 'pending' || f.status === 'replied'));
-                      if (match) {
-                        const tab = match.status === 'replied' ? 'warm' : new Date(match.due_date).toLocaleDateString('sv') <= todayStr ? 'today' : 'pending';
-                        setActiveTab(tab as any);
-                        setHighlightId(match.id);
-                        setTimeout(() => {
-                          document.getElementById(`card-${match.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          setTimeout(() => setHighlightId(null), 2000);
-                        }, 150);
-                      }
-                    }}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-gray-900">{v.restaurant_name}</div>
-                      {v.phone && <div className="text-xs text-gray-400 mt-0.5">{v.phone}</div>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-gray-700">{v.contact_person || '—'}</div>
-                      {v.email && <div className="text-xs text-gray-400 mt-0.5">{v.email}</div>}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {v.sales_rep ? (
-                        <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">{v.sales_rep}</span>
-                      ) : <span className="text-gray-400">—</span>}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-gray-600">
-                      {parseVisitDate(v.visited_at)
-                        ? parseVisitDate(v.visited_at)!.toLocaleDateString('en-DE', { day: 'numeric', month: 'short', year: 'numeric' })
-                        : v.visited_at || '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {v.interest_level ? (
-                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold capitalize ${INTEREST_COLORS[v.interest_level.toLowerCase()] || 'bg-gray-100 text-gray-500'}`}>
-                          {v.interest_level}
-                        </span>
-                      ) : <span className="text-gray-400">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      {v.pipeline_stage ? (
-                        <span className="text-xs text-gray-600 capitalize">
-                          {STAGE_LABELS[v.pipeline_stage] || v.pipeline_stage}
-                        </span>
-                      ) : <span className="text-gray-400">—</span>}
-                    </td>
-                    <td className="px-4 py-3 max-w-xs">
-                      <span className="text-xs text-gray-500 line-clamp-2">{v.notes || '—'}</span>
-                    </td>
+          <>
+            {/* Filter control: All / Not Interested / Active — driven by pipeline_stage */}
+            <div className="flex items-center gap-2 mb-4">
+              {[
+                { key: 'all', label: `All (${visits.length})` },
+                { key: 'not_interested', label: `Not Interested (${notInterestedCount})` },
+                { key: 'active', label: 'Active' },
+              ].map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setVisitFilter(f.key as any)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                    visitFilter === f.key
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-green-400'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {visibleVisits.length === 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-500">
+                No visits match this filter.
+              </div>
+            ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <th className="px-4 py-3">Restaurant</th>
+                    <th className="px-4 py-3">Contact</th>
+                    <th className="px-4 py-3">Rep</th>
+                    <th className="px-4 py-3">Visited</th>
+                    <th className="px-4 py-3">Interest</th>
+                    <th className="px-4 py-3">Stage</th>
+                    <th className="px-4 py-3">Notes</th>
+                    <th className="px-4 py-3">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {visibleVisits.map(v => (
+                    <tr
+                      key={v.location_id}
+                      className="hover:bg-gray-50 transition cursor-pointer"
+                      onClick={() => {
+                        const match = followups.find(f => f.location_id === v.location_id && (f.status === 'pending' || f.status === 'replied'));
+                        if (match) {
+                          const tab = match.status === 'replied' ? 'warm' : new Date(match.due_date).toLocaleDateString('sv') <= todayStr ? 'today' : 'pending';
+                          setActiveTab(tab as any);
+                          setHighlightId(match.id);
+                          setTimeout(() => {
+                            document.getElementById(`card-${match.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            setTimeout(() => setHighlightId(null), 2000);
+                          }, 150);
+                        }
+                      }}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-gray-900">{v.restaurant_name}</div>
+                        {v.phone && <div className="text-xs text-gray-400 mt-0.5">{v.phone}</div>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-gray-700">{v.contact_person || '—'}</div>
+                        {v.email && <div className="text-xs text-gray-400 mt-0.5">{v.email}</div>}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {v.sales_rep ? (
+                          <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">{v.sales_rep}</span>
+                        ) : <span className="text-gray-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                        {parseVisitDate(v.visited_at)
+                          ? parseVisitDate(v.visited_at)!.toLocaleDateString('en-DE', { day: 'numeric', month: 'short', year: 'numeric' })
+                          : v.visited_at || '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        {v.interest_level ? (
+                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold capitalize ${INTEREST_COLORS[v.interest_level.toLowerCase()] || 'bg-gray-100 text-gray-500'}`}>
+                            {v.interest_level}
+                          </span>
+                        ) : <span className="text-gray-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {v.pipeline_stage ? (
+                          <span className={`text-xs capitalize ${v.pipeline_stage === 'not_interested' ? 'font-bold text-red-600' : 'text-gray-600'}`}>
+                            {STAGE_LABELS[v.pipeline_stage] || v.pipeline_stage}
+                          </span>
+                        ) : <span className="text-gray-400">—</span>}
+                      </td>
+                      <td className="px-4 py-3 max-w-xs">
+                        <span className="text-xs text-gray-500 line-clamp-2">{v.notes || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        {v.pipeline_stage === 'not_interested' ? (
+                          reapproachSuccess === v.location_id ? (
+                            <span className="text-xs font-semibold text-green-600">✓ Re-approached</span>
+                          ) : (
+                            <button
+                              onClick={() => setReapproachId(v.location_id)}
+                              className="text-xs px-3 py-1.5 rounded-lg border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 font-semibold transition"
+                            >
+                              ↻ Re-approach
+                            </button>
+                          )
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            )}
+          </>
         )
+      )}
+
+      {/* Re-approach confirmation */}
+      {reapproachId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Re-approach this lead?</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Clears the "Not Interested" status and restarts the follow-up sequence from today, as if this were a fresh visit.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setReapproachId(null)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 rounded-lg text-sm">
+                Cancel
+              </button>
+              <button
+                onClick={() => handleReapproach(reapproachId)}
+                disabled={reapproaching}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm">
+                {reapproaching ? 'Saving...' : 'Yes, Re-approach'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Follow-ups content */}

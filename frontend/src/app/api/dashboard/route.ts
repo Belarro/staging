@@ -158,6 +158,16 @@ export async function GET(request: NextRequest) {
       f.status === 'pending' && new Date(f.due_date) <= todayEnd
     ).length;
 
+    // Total places visited: any non-archived location with a logged visit
+    // (timestamp not null). Same table/pattern as visits/route.ts line 23 and
+    // follow-ups/today/route.ts. Lightweight id-only fetch, count via length
+    // (fetchFromSupabase doesn't currently expose response headers, so
+    // Prefer: count=exact isn't usable here without changing that helper).
+    const visitedLocations = await fetchFromSupabase(
+      '/locations?select=id&timestamp=not.is.null&archived=neq.YES'
+    ).catch(() => []);
+    const totalVisits = (visitedLocations || []).length;
+
     // Reorder alerts
     const seedReorderAlerts = (seedInv || []).filter((inv: any) => {
       if (!inv.crop) return false;
@@ -177,6 +187,7 @@ export async function GET(request: NextRequest) {
           active_customers: activeCustomers,
           total_customers: custs.length,
           active_orders: liveOrders.length,
+          total_visits: totalVisits,
         },
         this_month: {
           label: today.toLocaleDateString('en-DE', { month: 'long', year: 'numeric' }),

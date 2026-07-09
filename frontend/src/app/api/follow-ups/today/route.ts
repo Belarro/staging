@@ -32,7 +32,7 @@ export async function GET(_request: NextRequest) {
     const locMap = new Map<string, any>(locations.map((l: any) => [l.id, l]));
 
     // Stages where follow-ups must stop (client won, lost, or snoozed)
-    const STOPPED_STAGES = new Set(['active', 'snoozed', 'closed_won', 'closed_lost', 'converted']);
+    const STOPPED_STAGES = new Set(['active', 'snoozed', 'closed_won', 'closed_lost', 'converted', 'not_interested']);
 
     // Only the next (lowest-stage) pending follow-up per location
     const nextPerLocation = new Map<string, any>();
